@@ -1,0 +1,20 @@
+# Business material never goes into the public repository.
+private/
+
+# Secrets
+.env
+*.env
+secrets/
+*.kubeconfig
+kubeconfig
+
+# Raw measurement data is published separately (Zenodo), not committed.
+data/raw/
+
+# Build and tooling
+bin/
+dist/
+.venv/
+__pycache__/
+.ipynb_checkpoints/
+.DS_Store
