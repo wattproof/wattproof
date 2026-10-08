@@ -34,15 +34,19 @@ So the largest lever on most clusters is **how many servers are powered**, not w
 | Placement | Energy-marginal scoring among powered nodes | A few percent, on mixed hardware only | later |
 | Time shifting | Run deferrable batch when power is cheap or low-carbon | Cost and CO2, not kWh | later |
 
-Powering a node off pays only if it stays off long enough. The break-even time is
+Powering a node off pays only if it stays off long enough. During shutdown and boot the node would
+have drawn idle power anyway, so only the energy above idle is a cost. The break-even off-time,
+from the end of shutdown to the start of boot, is
 
 ```
-t_break_even = (E_shutdown + E_boot) / (P_idle - P_off)
+t_break_even = (E_shutdown + E_boot - P_idle × (t_shutdown + t_boot)) / (P_idle - P_off)
 ```
 
-Example: a boot that takes 5 minutes at 200 W costs 60 kJ. With 120 W idle and 10 W off, the
-node must stay off for about 9 minutes before switching it saves anything. Wattproof measures these
-quantities per node instead of assuming them.
+Example: a boot that takes 5 minutes at 200 W costs 60 kJ. Idling at 120 W for those 5 minutes
+would have cost 36 kJ, so the boot costs 24 kJ extra. With 10 W off, the node recovers that after
+24,000 / 110 ≈ 218 seconds off. Counting the boot, it must be away about 8.6 minutes before
+switching it saves anything. Wattproof measures these quantities per node instead of assuming
+them.
 
 ## Daily cycles
 
@@ -134,7 +138,13 @@ A `MeterDriver` interface with one implementation per device family:
 
 - Reference power analyser over SCPI (Yokogawa WT300E series, ZES LMG, Hioki PW33xx).
 - Outlet-metered PDU over SNMP or HTTP (Raritan PX3 first).
-- BMC over Redfish, with IPMI DCMI as fallback.
+- BMC over Redfish, with IPMI DCMI as fallback. The driver reads the chassis's
+  `EnvironmentMetrics` (`PowerWatts`, `EnergykWh`) and `PowerSubsystem`. The older `Power`
+  resource is deprecated and read only when nothing newer exists.
+
+Each driver records the device's vendor, model and firmware, and what it got wrong: missing
+counters, coarse steps, failed wake-ups, slow boots. Over time this becomes a published
+compatibility record of BMCs and meters.
 
 Each driver returns timestamped samples with a quality class. Energy counters are preferred to
 integrating sampled power. A `PowerMeter` resource maps outlets to nodes. A server with two power
@@ -144,7 +154,10 @@ supplies has two outlets, and both are summed.
 
 A DaemonSet with read-only access to `/proc` and `/sys`. It samples per-core utilisation,
 frequency, C-state residency, RAPL counters and temperatures at 1 Hz. These are model features,
-never totals. In v0.3 it gains an opt-in, privileged mode that applies CPU power settings.
+never totals. With simultaneous multithreading, utilisation per logical CPU misstates both
+capacity and power: two busy threads on one core do not draw twice the power of one. So the
+features use busy time per physical core. In v0.3 the agent gains an opt-in, privileged mode that
+applies CPU power settings.
 
 ### Recorder
 
@@ -188,6 +201,10 @@ A greedy rule is enough to start: rank nodes by predicted energy per unit of cap
 the best-ranked ones on until capacity is covered. The output is a `PowerPlan` listing each step,
 its reason and its predicted saving.
 
+The scheduling simulation shares its code with the offline cluster simulator
+([ADR-0011](adr/0011-simulate-before-the-testbed.md)), which runs the planner against B0 and B1
+on published power curves before any hardware is involved.
+
 ### Actuators
 
 - **Taints.** A node that is draining or off carries `NoSchedule` taints, so the stock scheduler
@@ -207,7 +224,7 @@ usage ([ADR-0010](adr/0010-diurnal-overcommit-cpu-only.md)).
 
 A pod is eligible only if all of these hold:
 
-- Its workload opts in with the annotation `energy.wattproof.io/resize: "cpu"`.
+- Its workload opts in with the annotation `energy.wattproof.de/resize: "cpu"`.
 - Its QoS class is Burstable. Guaranteed pods are excluded, because their CPU request must equal
   their limit, so lowering one caps the other.
 - No VerticalPodAutoscaler manages it.
@@ -271,7 +288,7 @@ per workload template and cached, and acts only above a confidence threshold.
 
 ## Kubernetes API
 
-Group `energy.wattproof.io/v1alpha1`.
+Group `energy.wattproof.de/v1alpha1`.
 
 | Kind | Scope | Purpose |
 |---|---|---|
@@ -298,7 +315,7 @@ Each of these has a test that can fail.
 
 1. Never power off a node with a pod that cannot be evicted: its PodDisruptionBudget would be
    violated, it has no controller, it uses node-local storage, or it is annotated
-   `energy.wattproof.io/protect`.
+   `energy.wattproof.de/protect`.
 2. Never power off control-plane nodes or nodes matching the protected selector.
 3. Never fewer powered nodes than the minimum; never more concurrent transitions than the maximum.
 4. If meters or models are stale, start no new power-off. Pending power-ons still complete.

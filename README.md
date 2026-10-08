@@ -21,8 +21,10 @@ Status: design. Nothing here is ready to install.
 
 - [Architecture](docs/architecture.md)
 - [Measurement](docs/measurement.md)
+- [Experiment protocol](docs/experiment-protocol.md) (draft, registered before the first run)
 - [Decisions](docs/adr/)
 - [Related work](docs/research/related-work.md)
+- [Roadmap](ROADMAP.md)
 
 ## License
 
