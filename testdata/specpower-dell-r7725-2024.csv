@@ -1,0 +1,16 @@
+# Dell PowerEdge R7725, 2x AMD EPYC 9965, hardware available November 2024.
+# SPECpower_ssj2008 result power_ssj2008-20241007-01464, average active power per target load.
+# Source: https://www.spec.org/power_ssj2008/results/res2024q4/power_ssj2008-20241007-01464.txt
+# cpus: 768
+load,watts
+0.0,138
+0.1,297
+0.2,367
+0.3,438
+0.4,515
+0.5,593
+0.6,661
+0.7,710
+0.8,771
+0.9,812
+1.0,861

@@ -1,0 +1,16 @@
+# Dell PowerEdge R7425, 2x AMD EPYC 7601, hardware available May 2018.
+# SPECpower_ssj2008 result power_ssj2008-20180522-00816, average active power per target load.
+# Source: https://www.spec.org/power_ssj2008/results/res2018q2/power_ssj2008-20180522-00816.txt
+# cpus: 128
+load,watts
+0.0,84.9
+0.1,138
+0.2,154
+0.3,168
+0.4,182
+0.5,197
+0.6,214
+0.7,234
+0.8,253
+0.9,271
+1.0,287
