@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: v1.4, 2026-10-09. It replaces v1.3 and v1.2 of the same day, v1.1 and v1 of 2026-10-08 and draft v0 of 2026-09-26. The business track lives separately
+Status: v1.5, 2026-10-09. It replaces v1.4, v1.3 and v1.2 of the same day, v1.1 and v1 of 2026-10-08 and draft v0 of 2026-09-26. The business track lives separately
 and refers to these phases by number.
 
 Wattproof has three pillars: **rightsize, power state, verify**
@@ -13,6 +13,23 @@ the rightsizing report (Phase 1R), because it needs no testbed and it is what an
 first.
 
 Every phase ends in tests that can fail. A green suite that cannot go red proves nothing.
+
+## What changed in v1.5
+
+- **Two outside reviews before the registered experiment.** A power-measurement scientist and a
+  statistician check calibration, the A/A pilot, the margins and the block design before T0
+  (Phase 2), and the analysis plan before registration (Phase 4). Every comment gets a written
+  answer before the protocol is frozen. Reviewers are named only with their written consent.
+- **Protocol fixes** ([changes](docs/experiment-protocol.md#changes-to-this-draft)): each claim is
+  a joint test, tested in a fixed order; margins come from the service level and are fixed before
+  the A/A pilot; blocks start at the daily peak with no reset, and the pilot runs B1 blocks to
+  measure hand-overs between arms; block orders follow a Williams design.
+- **Calibration at low load** ([measurement.md](docs/measurement.md#calibration-procedure)): the
+  example PDU's outlets resolve 1 W, so 0.5% of a server that is off cannot be checked. The rule
+  now has a floor in watts.
+- **The rightsizing report lists the nodes kept on for node-local storage** (invariant 1).
+- **A threat model and an external security review** come before the first design-partner install
+  (v0.3).
 
 ## What changed in v1.4
 
@@ -201,7 +218,8 @@ hardware). Next: measure the real ratio in the Alibaba and Google traces (Phase 
    curves until measured ones exist) and reports, labelled as model estimates:
    - cores and memory freed at peak, and servers that would no longer be needed at peak;
    - energy saved off-peak, for power state alone and with rightsizing;
-   - workloads excluded, with the reason (Guaranteed QoS, VPA, `Utilization` HPA, short history).
+   - workloads excluded, with the reason (Guaranteed QoS, VPA, `Utilization` HPA, short history);
+   - nodes that stay on because a pod uses node-local storage (invariant 1), with the pod.
 5. Run it on the testbed during the Phase 2 pilots, and offer it to the first operators.
 
 Exit tests:
@@ -246,7 +264,8 @@ If T0 arrives before Phase 1R is done, Phase 1 and Phase 2 take priority.
     reference analyser (tested against a fake instrument).
 - **The analyser driver** (SCPI over Ethernet for the Yokogawa WT310E), on every route that
   calibrates against the analyser. SPEC's PTDaemon cannot be used: it ships only inside SPEC's
-  licensed suites. Tested against a fake instrument.
+  licensed suites. It sets and logs the range for each load point, with auto-ranging off. Tested
+  against a fake instrument.
 - Recorder writing Prometheus metrics and immutable Parquet files. Gap detection.
 - `wattproof-calibrate`: runs the five-point calibration and writes the fit and report.
 - **Power profiling** ([feature note](docs/research/features/power-profiling.md),
@@ -270,8 +289,9 @@ Exit tests:
 - The load runner holds each target level within ±2 percentage points of the target throughput
   over the measured window, or the level is flagged and repeated.
 - A level whose window has a meter gap above the 1% rule is flagged, never silently averaged.
-- On hardware, once available: every PDU outlet calibrates against the analyser with residual
-  below 0.5% at all five points, or is excluded.
+- On hardware, once available: every PDU outlet calibrates against the analyser within the
+  acceptance tolerance at all five points (0.5%, or a floor in watts at the lowest loads;
+  [measurement.md](docs/measurement.md#calibration-procedure)), or is excluded.
 
 ## Phase 1G: One GPU node at the wall (before v0.1 ships, as access allows)
 
@@ -319,6 +339,13 @@ Before T0, on kind:
 - Public lab notebook page ([ADR-0009](docs/adr/0009-public-live-lab.md)) with the design, the
   protocol draft and the simulation results. Live data joins at T0.
 
+Before T0, outside the cluster:
+- **Outside review, part 1.** A power-measurement scientist and a statistician review
+  calibration, profiling, the A/A pilot design, the margins and the block design. Every comment
+  gets a written answer before T0, and a change it causes is recorded in the document it changes.
+- The non-inferiority margins are published in the protocol, with their reasons, before the A/A
+  pilot.
+
 From T0:
 - Install Kubernetes on the testbed. Record the method, versions and BIOS settings as code.
 - Calibrate every PDU outlet against the analyser, then **profile every server**
@@ -332,8 +359,9 @@ From T0:
   rule; Profile S only after SPEC's review.
 - The recorder pushes aggregates to object storage; the page shows power, node states, the
   running arm, load and latency.
-- A/A pilot: B0 against B0 over enough blocks to estimate block-to-block noise. The pilot also
-  measures carryover: how long one arm still shows after the next one starts.
+- A/A pilot: B0 against B0 over enough blocks to estimate block-to-block noise. B1 blocks run
+  between them, so the pilot also measures the hand-overs from B0 to B1 and back: how long the
+  previous arm still shows in power, node states and pod placement.
 
 Exit tests:
 - Every server has a profile for each load type, with no flagged level left unrepeated.
@@ -350,7 +378,7 @@ Exit tests:
   from the internet (checked with an external port scan).
 - The pilot yields the minimum detectable effect. If it is above 3%, the block design or testbed
   changes before Phase 4.
-- The pilot yields the carryover length, and the warm-up covers it.
+- The pilot yields the length of the hand-overs between B0 and B1, and the warm-up covers it.
 
 ## Phase 3: Engine v0.1 (week 6 to T0 + 6 weeks)
 
@@ -371,19 +399,25 @@ Exit tests:
   end-to-end test on kind with a fake power driver. Invariant 9 belongs to Phase 3R.
 - The testbed completes 200 automated Wattproof power cycles with no stuck node.
 - 72 hours in Act mode under replayed load with no guard trip and no stuck node.
+- On the testbed, the time T takes to take over from B0 and from B1 at the daily peak is
+  measured, and the warm-up covers it.
 - Model accuracy is reported against class B measurements. This is a number, not a pass/fail.
 
 ## Phase 4: Registered experiment (T0 + 6 to T0 + 9 weeks)
 
 - Run the simulator on the testbed's measured profiles (Phase 2) and record its prediction in the
-  protocol.
+  protocol. Compute the number of blocks from the pilot's noise, the prior and the margins.
+- **Outside review, part 2.** The same reviewers check the analysis plan. Every comment gets a
+  written answer before the freeze. Reviewers are named in the registration only with their
+  written consent.
 - Freeze [experiment-protocol.md](docs/experiment-protocol.md) and register it on OSF before the
   first T block runs.
 - Run the blocks. Monitor meter gaps daily, holidays included: the blocks run unattended.
 - The analysis in `analysis/` runs in CI from the raw data.
-- If Umwelt-Campus Birkenfeld agrees, they replicate a subset independently.
+- If an independent measurement lab agrees, it replicates a subset independently.
 
 Exit tests:
+- Every review comment has a written answer before the protocol is registered.
 - CI reproduces every number in the results from the raw data.
 - Results are final, whatever they show.
 
@@ -444,7 +478,7 @@ Exit tests:
 
 | Version | Content |
 |---|---|
-| v0.3 | HPA coordination: workloads scaled on CPU `Utilization` get their target scaled with the request, instead of being excluded (ADR-0012). GPU inference lever (ADR-0014): GPU nodes powered off along the daily cycle with model load in the lead time, then SM clocks locked per serving phase, measured at the wall; NVML only as a feature. Field mode for BMC-only (class C) clusters with stated uncertainty. First design-partner install in Observe mode. The BMC compatibility record and the power-cycle record are published. With funding, a second engineer starts the GPU track in parallel right after v0.1. |
+| v0.3 | HPA coordination: workloads scaled on CPU `Utilization` get their target scaled with the request, instead of being excluded (ADR-0012). GPU inference lever (ADR-0014): GPU nodes powered off along the daily cycle with model load in the lead time, then SM clocks locked per serving phase, measured at the wall; NVML only as a feature. Field mode for BMC-only (class C) clusters with stated uncertainty. First design-partner install in Observe mode, after a threat model and an external security review: Wattproof holds the BMC credentials of every server. The BMC compatibility record and the power-cycle record are published. With funding, a second engineer starts the GPU track in parallel right after v0.1. |
 | v0.4 | CPU power settings lever (opt-in privileged agent). Experiment 3, GPU inference: wall kWh per million tokens, TTFT and ITL attainment, minutes waiting for a model to load. |
 | v0.5 | Continuous self-tuning: the experiment engine tunes planner parameters. Production holdout reporting. |
 

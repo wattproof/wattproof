@@ -1,6 +1,8 @@
 # Measurement
 
-Status: draft v0, 2026-09-26.
+Status: draft v0.1, 2026-10-09. It replaces draft v0 of 2026-09-26: the calibration rule now has
+a tolerance in watts at low load, because 0.5% of a few watts is finer than the example PDU's
+outlets resolve (1 W).
 
 A saving is only as credible as the meter behind it. This document defines what is measured, with
 which devices, how they are calibrated, and what is published.
@@ -20,7 +22,7 @@ Every published number states its class. Headline claims use class A or B only.
 | Class | Devices | Accuracy | Sample rate | Use |
 |---|---|---|---|---|
 | A: reference | Power analysers on SPEC's PTDaemon accepted list, e.g. Yokogawa WT310E: ±(0.1% of reading + 0.05% of range), 100 kS/s internal sampling, 100 ms updates | about ±0.1–0.2% | 10 Hz | Calibration of class B; spot checks; small headline experiments |
-| B: outlet-metered PDU | e.g. Raritan PX3: ±1% billing grade per outlet | ±1% | about 1 Hz | Continuous per-node wall power |
+| B: outlet-metered PDU | e.g. Raritan PX3: ±1% billing grade per outlet, 1 W power resolution | ±1% | about 1 Hz | Continuous per-node wall power |
 | C: BMC | Redfish, IPMI DCMI | Coarse. One study found 1-byte readings (about 14 W steps) and a 60 s averaging window | 0.1–1 Hz | Field installs with nothing better. Never headline claims |
 | D: component estimates | RAPL, Kepler, NVML | Partial: CPU package and DRAM, or GPU board only. On A100/H100, nvidia-smi samples about 25% of runtime | ms | Model features and attribution. Never totals |
 
@@ -42,7 +44,8 @@ outlet.
 1. **Linearity.** Calibrate each class B outlet against the class A analyser at five load points
    (off, idle, 33%, 66%, 100%) and publish the curve.
 2. **Drift.** Repeat the calibration before and after every campaign. If the two differ by more
-   than 0.5% at any point, the campaign's results carry that as added uncertainty.
+   than the acceptance tolerance (below) at any point, the campaign's results carry that as added
+   uncertainty.
 3. **Aliasing.** Sample at 1 Hz or faster. Prefer the meter's own energy counter to integrating
    power samples.
 4. **Crossover.** Each arm of an experiment runs on each set of nodes and at each time of day
@@ -51,13 +54,23 @@ outlet.
 ## Calibration procedure
 
 1. Put the class A analyser in series with one server's inlet. The PDU outlet stays in the path.
-2. At each load point, run steady load for 10 minutes. Discard the first 2 minutes.
-3. Compare the energy each device reports over the remaining 8 minutes. Fit gain and offset per
-   outlet.
-4. Accept an outlet if its residual after correction is below 0.5% at every load point. Otherwise,
-   replace or exclude it.
-5. Store the raw data, the fit and the analyser's own calibration certificate date with the
-   campaign.
+2. At each load point, run steady load for 10 minutes. Discard the first 2 minutes. The analyser
+   measures each load point on the lowest range that holds it. The range is set by hand and
+   logged, never auto-ranged, because the analyser's error includes a share of the range: on the
+   range for full load (e.g. 300 V × 2 A = 600 W), 0.05% of range is 0.3 W, which is 3% of a
+   server that draws 10 W when off.
+3. Compare the energy each device reports over the remaining 8 minutes. Where a device's energy
+   counter is too coarse for 8 minutes at that load, as at the off point, compare mean power from
+   its samples instead. Fit gain and offset per outlet.
+4. Accept an outlet if, at every load point, its residual after correction is within the larger
+   of 0.5% of the analyser's reading and a floor in watts. The floor is half the outlet's power
+   resolution plus the analyser's uncertainty on the range used. It is stated before calibration:
+   about 0.5 W for an outlet that reports whole watts, so it applies only at the lowest loads.
+   Otherwise, replace or exclude the outlet.
+5. Off-state power enters every break-even time, so its uncertainty (at least the floor) is
+   carried into them.
+6. Store the raw data, the fit, the ranges used and the analyser's own calibration certificate
+   date with the campaign.
 
 ## Power profile
 

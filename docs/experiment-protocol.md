@@ -2,7 +2,7 @@
 
 Status: DRAFT, public since 2026-10-08. It will be frozen and registered (OSF, timestamped) before
 the first Wattproof block runs. After registration, every deviation is reported in the results.
-Comments on the draft are welcome until then.
+Comments on the draft are welcome until then. Changes to the draft are listed at the end.
 
 ## Question
 
@@ -63,15 +63,24 @@ does not stop early, so watching cannot change the result.
 
 ## Blocks and randomisation
 
-- Block length: long enough to hold a full compressed load cycle plus transitions. Starting value:
+- Block length: one compressed load cycle, from one daily peak to the next. Starting value:
   4 hours, fixed after the pilot.
-- The first 15 minutes of every block are warm-up and excluded. This handles carryover: an arm
-  that powered nodes off leaves them off when the next block starts. The pilot measures how long
-  the previous arm still shows in power and node states, and the warm-up is set to cover it, as
-  in the switchback design literature (Bojinov, Simchi-Levi and Zhao, 2023).
-- Every block starts from the same state: all workers powered and Ready.
-- Arms run in randomised order within each set of three blocks (a Latin square). The seed is
-  published.
+- **Blocks start at the daily peak, and nothing is reset between them.** Each arm takes over the
+  cluster as the previous arm left it: a node the previous arm powered off stays off until the new
+  arm powers it on. The peak is where the arms' states differ least, because the load then needs
+  most workers under every arm.
+- **What a block estimates:** an arm's wall energy over one day of steady operation, peak to
+  peak. Starts from a cold or reset cluster are not part of it.
+- **Warm-up:** the first 15 minutes of every block are excluded, so that the previous arm no
+  longer shows in what is measured. The warm-up must cover the slowest hand-over, B1's included:
+  Cluster Autoscaler waits 10 minutes before a node counts as unneeded, then drains it and powers
+  it off. Hand-overs between different arms are measured before registration (B0 and B1 in the
+  pilot, T in the engineering runs on the testbed), and the warm-up is set to the longest, as in
+  the switchback design literature (Bojinov, Simchi-Levi and Zhao, 2023).
+- **Order:** each set of three blocks runs the three arms in one of their six possible orders.
+  The orders are drawn at random without replacement, so every six sets use each order once and
+  each arm follows each other arm equally often (a Williams design). The number of sets is a
+  multiple of six. The seed is published.
 - With two identical node pools, arms also swap pools between sets (crossover).
 
 ## Endpoints
@@ -89,8 +98,40 @@ does not stop early, so watching cannot change the result.
 - H1: energy(T) < energy(B0).
 - H2: energy(T) < energy(B1).
 - Non-inferiority, against both B0 and B1:
-  - p99 latency(T) is at most the baseline's p99 plus a margin fixed at registration;
-  - SLO violation minutes(T) are at most the baseline's plus a margin fixed at registration.
+  - N1: p99 latency(T) is at most the baseline's p99 plus a margin;
+  - N2: SLO violation minutes(T) are at most the baseline's plus a margin.
+
+### Claims and error control
+
+A claim holds only if every test in it passes, so no claim can rest on tests picked after the
+data is seen:
+
+1. **C1, against stock Kubernetes:** "T uses less energy than B0 without worse service" holds if
+   H1, N1 and N2 against B0 all pass.
+2. **C2, against the competent configuration:** the same against B1: H2, N1 and N2. C2 is tested
+   only if C1 holds.
+
+- Every test is one-sided at α = 0.05. A claim needs all of its tests (an intersection-union
+  test), and C2 is tested only after C1 (a fixed sequence), so the chance of any false claim stays
+  at or below 5% without splitting α.
+- A test passes only if both the randomisation test and the bootstrap interval (two-sided 90%)
+  pass it; for non-inferiority, the randomisation test is run against the margin. If they
+  disagree, the test fails and both are reported.
+- Secondary endpoints are reported with their intervals and support no claim.
+- Experiment 2 and Verify V1 follow the same rules. The order of their claims is fixed when each
+  is registered.
+
+### Non-inferiority margins
+
+The margins come from the service level, never from the data:
+
+- **N1:** a stated share of the latency-sensitive workload's p99 target;
+- **N2:** the minutes of SLO violation per compressed day that an operator would accept on top of
+  the baseline.
+
+Both are checked with operators, published here with their reasons before the A/A pilot starts,
+and not changed afterwards. If the pilot shows that the planned blocks cannot show
+non-inferiority at these margins, the number of blocks changes, not the margins.
 
 ## Expected effect, stated in advance
 
@@ -102,17 +143,35 @@ tested, not a result.
 ## Sample size
 
 An A/A pilot (B0 against B0) measures the block-to-block noise. From it we compute the number of
-blocks that detects a 3% difference with power 0.8 at α = 0.05. If the pilot shows the testbed
-cannot detect 3% in a reasonable number of blocks, the testbed or the block design changes before
-any T block runs.
+blocks that gives power 0.8 at α = 0.05 (one-sided) for each of:
+
+- a 3% difference in energy;
+- the registered prior's T/B1 difference, if it is smaller than 3%;
+- non-inferiority at both margins.
+
+The largest count is used, rounded up to whole groups of six sets, if the testbed time allows it.
+If the pilot shows the testbed cannot detect 3% in a reasonable number of blocks, the testbed or
+the block design changes before any T block runs. If it can detect 3% but not the prior's T/B1
+difference, the registration says so, and H2 is expected to end inconclusive.
+
+How results are reported, fixed now:
+
+- every energy ratio with its 90% interval, whatever the tests show;
+- a claim that is not shown is reported as inconclusive, with its intervals, never as "no
+  difference";
+- "no difference of 3% or more" is reported only if the whole 90% interval of a ratio lies
+  between 0.97 and 1.03.
 
 ## Analysis
 
-- Paired differences within each Latin-square set; the ratio of mean energies with a bootstrap
-  confidence interval.
+- Paired differences within each set; the ratio of mean energies with a bootstrap confidence
+  interval.
 - An exact randomisation test as well: the p-value comes from re-running the analysis under every
   arm order the randomisation could have produced. It needs no distributional assumption, which
-  matters with a small number of blocks. If the two disagree, both are reported.
+  matters with a small number of blocks. If the two disagree, the test fails
+  ([Claims and error control](#claims-and-error-control)) and both are reported.
+- Carryover: a model with the previous block's arm as a covariate estimates it. It is reported
+  next to the main result and is not used for the claims.
 - Every block is reported. Exclusions happen only for pre-defined reasons (meter gaps above 1% of
   the block, a hardware fault), and each one is listed.
 - One script produces every number in the report from the raw data. CI runs it.
@@ -162,6 +221,10 @@ their inputs. Nobody has published the wall power of an idle or powered-off GPU 
   the first served token, for a small and a large model, from local NVMe and from network storage.
   Each is timed and metered. Boot plus model load is the input the simulated service level depends
   on most ([notebook](notebook/2026-10-09-gpu-inference-simulation.md)).
+- **Concurrent loads:** at the morning ramp several nodes load models at the same time from the
+  same storage. If the operator allows it, the large model's load from network storage is also
+  timed while one to three other nodes load from the same storage. Otherwise the storage's read
+  throughput is recorded, and the simulator models the contention.
 - **Repeated cycles:** at least 20 power cycles, each followed by the GPU health check, with every
   failure recorded. The simulated planner cycles a node about once a day.
 - **Clocks:** decode and prefill at default clocks and at three locked SM clocks, with TTFT, ITL
@@ -187,13 +250,15 @@ the GPUs are about half of a GPU server's power.
 
 - **Workload:** one model served by vLLM, replaying the Azure 2024 conversation trace at three
   fixed loads. The same requests in the same order in every block.
-- **Blocks:** 30 minutes, the first 5 excluded, arms in randomised order within each set of three
-  blocks; an A/A pilot (D against D) sets the number of sets.
+- **Blocks:** 30 minutes, the first 5 excluded, arms ordered as in Experiment 1 (each set runs one
+  of the six orders, drawn without replacement); an A/A pilot (D against D) sets the number of
+  sets.
 - **Primary endpoint:** wall energy per output token.
 - **Secondary:** TTFT and ITL at p50, p95 and p99; throughput; NVML board energy per token, to
   report the board-to-wall ratio.
 - **Hypotheses:** P and W use less wall energy per token than D, with p99 ITL at most D's plus a
-  margin fixed at registration. The wall saving is stated next to the board saving.
+  margin set from the service's ITL target before the pilot, as in Experiment 1. The wall saving
+  is stated next to the board saving.
 - **Neutrality:** the vendor's claim is quoted as published and tested as stated. The result is
   published whatever it shows, with the raw data.
 
@@ -213,3 +278,19 @@ Registered after Phase 1G and the simulation, on a multi-node GPU testbed.
 - **Primary:** wall kWh per million output tokens.
 - **Secondary and non-inferiority:** TTFT and ITL attainment at p95 and p99; minutes of requests
   waiting for a model to load; power cycles and failed health checks per node.
+
+## Changes to this draft
+
+2026-10-09:
+
+- Each claim is a joint test, and C2 is tested only after C1
+  ([Claims and error control](#claims-and-error-control)).
+- The non-inferiority margins come from the service level and are fixed before the A/A pilot.
+- Blocks start at the daily peak, and nothing is reset between them. The earlier rule that every
+  block starts with all workers powered contradicted the carryover rule and is removed. The
+  warm-up must cover B1's hand-over.
+- Each set runs one of the six orders of the arms, and every six sets use each order once (a
+  Williams design), in Experiment 1 and in V1.
+- The sample size also covers the prior and the margins, and how an inconclusive result is
+  reported is fixed.
+- Phase 1G times concurrent model loads where the operator allows it.
