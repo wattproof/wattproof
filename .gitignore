@@ -22,3 +22,6 @@ __pycache__/
 # Business tooling stays out of the public repository.
 .claude/skills/product-verdict/
 .claude/settings.local.json
+
+# The website is deployed with wrangler from a local copy, not from this repository.
+site/
