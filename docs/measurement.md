@@ -93,3 +93,6 @@ Recorded, not controlled:
 - Cluster events: power cycles, evictions, guard trips
 - Analysis code that reproduces every number in the report from the raw data
 - A DOI for the dataset (Zenodo)
+
+The dataset is released together with its write-up, at the latest eight weeks after the
+measurement ends ([publishing rules](publishing.md)).

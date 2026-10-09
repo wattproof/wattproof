@@ -1,6 +1,6 @@
 # Related work
 
-Researched 2026-09-27, research section added 2026-10-08. What exists, what it does, and where
+Researched 2026-09-27, research section added 2026-10-08, GPU inference added 2026-10-09. What exists, what it does, and where
 Wattproof differs.
 
 ## The lever is old; adoption is the problem
@@ -68,10 +68,38 @@ The lever and its control policies are well studied. These results shape Wattpro
 - **Requests, not usage, keep nodes powered.** CAST AI's 2026 report found average CPU utilisation
   of 8%, with requests 69% above usage. Its data comes from cloud clusters, not bare metal. If
   bare-metal clusters look similar, diurnal rightsizing (ADR-0010) may be a larger lever than
-  power state alone.
-- **GPU nodes.** A GPU holding a CUDA context draws 26–66 W above bare idle (arXiv 2605.23918,
-  preprint, 2026). Industry estimates put an idle 8×H100 server at 2–3 kW. Powering whole GPU
-  nodes off is the v0.1 lever applied to GPU nodes; the GPU clock lever is separate.
+  power state alone. Measured inputs from Google's 2019 trace say otherwise once memory is
+  counted: memory then decides how many servers stay on, and rightsizing CPU alone loses to VPA
+  ([trace simulation](../notebook/2026-10-08-trace-simulation.md)). Every commercial rightsizing
+  tool lowers memory requests as well (CAST AI, ScaleOps, StormForge, PerfectScale; see the
+  [rightsizing note](features/rightsizing.md#update-2026-10-09-what-the-traces-changed)).
+- **Automated rightsizing halves slack without hurting reliability.** Google's Autopilot
+  (EuroSys 2020) cut average relative slack from 46% to 23% and the jobs severely hit by
+  out-of-memory kills by a factor of 10. Nobody has measured the wall-energy effect of
+  rightsizing on Kubernetes; on owned hardware it saves energy only if freed servers are powered
+  off. Details in [features/rightsizing.md](features/rightsizing.md).
+- **Memory limits consolidation, and one trace is not enough.** Alibaba frees resources of its
+  services along the daily cycle in production, and reports that memory, not CPU, limits how far
+  it can consolidate (Zhang et al., SoCC 2022). Research tuned to Google's trace often fails on
+  other clusters (Amvrosiadis et al., ATC 2018). Both shape the
+  [trace analysis plan](trace-analysis-plan.md).
+- **Power models from standard ratings carry error.** Predicting a server's power for an
+  application from its SPECpower results has about 9.5% mean error (von Kistowski et al., ICPE
+  2019). Google maps CPU usage to power per power domain across its fleet (Radovanovic et al.,
+  IEEE Transactions on Power Systems 2023), and has published power traces for the same cells as its
+  2019 cluster trace (Sakalkar et al., ASPLOS 2020).
+- **Bounding the saving with the Google trace.** Milocco et al. (IEEE TNSM 2020) used a 29-day
+  Google trace to bound the energy-cost saving of proactive server management over reactive
+  management. Read in full before any claim of novelty for forecasting.
+- **GPU nodes: inference, not training.** Inference load follows the day (Azure 2024 week: coding
+  peak 34.6× its valley), and inference clusters have about 21% power headroom against 3% for
+  training (Patel et al., ASPLOS 2024). DynamoLLM (HPCA 2025) cuts the servers an inference
+  cluster needs by 38% on average over that week, and saves 53% of energy with instance,
+  parallelism and frequency changes. Power caps do not engage in memory-bound decode; locking the
+  SM clock saves up to 32% of decode energy (arXiv 2605.11999, 2026). A GPU holding a CUDA context
+  draws 26–66 W above bare idle (arXiv 2605.23918, preprint, 2026). No wall measurement of an
+  idle GPU node was found; the 2–3 kW quoted for an idle 8×H100 server is a vendor-blog estimate.
+  Details in [features/gpu-inference.md](features/gpu-inference.md).
 - **Experiment design.** A switchback experiment gives one unit randomised treatments over time.
   Bojinov, Simchi-Levi and Zhao (Management Science, 2023) derive optimal designs under carryover
   and give exact randomisation-based inference. Wattproof's blocks and its production holdout are
@@ -101,7 +129,12 @@ The lever and its control policies are well studied. These results shape Wattpro
 | kube-green | Scales down chosen namespaces on a schedule (e.g. dev at night). | A different lever: schedule-based and opt-in by namespace. Complementary. |
 | Koordinator | Colocates batch work in reclaimed resources of latency-sensitive services, with usage prediction and interference detection. | Raises utilisation, not power state. A candidate to integrate for batch slack rather than rebuild. |
 | Compute Gardener | Carbon- and price-aware delays, energy budgets, GPU power profiles. | Time shifting and carbon; not node power state. |
+| NVIDIA Dynamo Planner | Scales prefill and decode workers against TTFT and ITL targets on Kubernetes. Apache-2.0. | Replica scaling for inference. Wattproof powers off the nodes it empties. |
+| KServe, llm-d | Model serving on Kubernetes; scale to zero only in Knative mode. Apache-2.0. | Same: replicas, not node power. |
+| Zeus / Perseus (ML.ENERGY) | GPU energy measurement and frequency or power-limit optimisation, mostly for training. Apache-2.0. | Prior art for the GPU clock lever; GPU board, not the wall. |
 | Intel Kubernetes Power Manager | CPU frequency and C-state control per node or pod. | Actuator candidate for our v0.3 CPU lever. |
+| Robusta KRR, Crane | Recommend requests (and, for Crane, replicas) from usage history. | Rightsizing without power state. Our rightsizing report adds the effect in servers and watts. |
+| Canonical MAAS | Bare-metal provisioning with a power-control API (IPMI, Redfish). Power-off on low demand must be scripted by the user. | A possible power driver, not a planner. |
 | Vertical Pod Autoscaler | Rightsizes requests. In-place pod resize is GA since Kubernetes 1.35 (December 2025), and VPA's InPlaceOrRecreate mode is beta. | Mechanism for diurnal rightsizing (ADR-0010). |
 
 ## Commercial, Kubernetes efficiency (cloud-first)
@@ -110,8 +143,18 @@ The lever and its control policies are well studied. These results shape Wattpro
 - **CAST AI:** $108M Series C in April 2025.
 - **Also:** Kubecost (IBM), Sedai, PerfectScale (DoiT), StormForge (CloudBolt), Platform9, Rafay.
 
+ScaleOps' AI Infra product (November 2025) adds GPU allocation, replica scaling and faster model
+loading for self-hosted models; it mentions neither energy nor power.
+
+**IBM Turbonomic** is the exception that reaches on-premises: it tracks the energy and carbon of
+on-premises hosts and virtual machines at 10-minute intervals and recommends actions that would
+reduce them. It estimates energy rather than measuring it at the wall; whether it powers hosts off
+for Kubernetes on bare metal was not checked (2026-10-09).
+
 They reduce cloud bills through rightsizing and instance choice. Energy is a side effect, not the
-measured target, and bare-metal power state is not their focus.
+measured target, and bare-metal power state is not their focus. ScaleOps also sells self-hosted
+and air-gapped editions that run on-premises, so it already rightsizes on owned hardware; no node
+power control was found in its product pages (checked 2026-10-08).
 
 ## Commercial, facility side
 
@@ -121,6 +164,18 @@ measured target, and bare-metal power state is not their focus.
 
 They optimise cooling and power infrastructure, not the workloads on the servers. Complementary:
 IT-side savings reduce the heat they must remove.
+
+## AI power and grid flexibility
+
+- **NVIDIA power profiles (WPPS):** energy-optimised GPU clock and power profiles for training and
+  inference, applied through Mission Control on DGX SuperPOD Slurm nodes. Up to 15% energy saved on
+  B200 (vendor, arXiv 2510.03872).
+- **Emerald AI:** $150M Series A at a $1.05B valuation (August 2026). Slows, pauses, caps or
+  shifts AI jobs, with on-site batteries, when the grid needs less load. With NVIDIA and Google
+  it founded the AI Energy Management Alliance (September 2026).
+
+They manage GPU power for the facility and the grid. Neither powers nodes off along the daily
+cycle or verifies savings at the wall, as far as found.
 
 ## Server vendor tools
 
@@ -136,6 +191,10 @@ policies. They are not workload-aware and do not consolidate.
 - [OpenStack Watcher Saving Energy](https://docs.openstack.org/watcher/latest/strategies/saving_energy.html)
 - [Koordinator](https://koordinator.sh/docs/architecture/overview)
 - [Crane](https://github.com/gocrane/crane)
+- [Autopilot (EuroSys 2020)](https://research.google/pubs/autopilot-workload-autoscaling-at-google-scale/)
+- [ScaleOps self-hosted](https://scaleops.com/product/self-hosted/)
+- [Robusta KRR](https://github.com/robusta-dev/krr)
+- [Canonical MAAS power automation (2025)](https://canonical.com/blog/cut-data-center-energy-costs-with-bare-metal-automation)
 - [Compute Gardener](https://www.compute-gardener.com/solutions/open-source-scheduler)
 - [Kepler](https://github.com/sustainable-computing-io/kepler)
 - [In-place pod resize GA](https://kubernetes.io/blog/2025/12/19/kubernetes-v1-35-in-place-pod-resize-ga)
@@ -148,6 +207,13 @@ policies. They are not workload-aware and do not consolidate.
 - [DREEM (Politecnico di Torino, 2025)](https://webthesis.biblio.polito.it/37712/)
 - [CAST AI 2026 report](https://cast.ai/blog/2026-state-of-kubernetes-resource-optimization-cpu-at-8-memory-at-20-and-getting-worse/)
 - [The Model Parking Tax (arXiv 2605.23918)](https://arxiv.org/abs/2605.23918)
+- [IBM Turbonomic energy and carbon tools](https://www.ibm.com/new/announcements/new-energy-and-carbon-emission-tools-for-your-business-applications-with-ibm-turbonomic)
+- [GPU inference feature note](features/gpu-inference.md), with its sources, 2026-10-09
+- [Characterizing power management opportunities for LLMs in the cloud (ASPLOS 2024)](https://www.microsoft.com/en-us/research/wp-content/uploads/2024/03/GPU_Power_ASPLOS_24.pdf)
+- [DynamoLLM (HPCA 2025)](https://arxiv.org/abs/2408.00741)
+- [The illusion of power capping in LLM decode (arXiv 2605.11999)](https://arxiv.org/abs/2605.11999)
+- [NVIDIA Dynamo Planner](https://docs.nvidia.com/dynamo/latest/components/planner)
+- [Emerald AI Series A (SiliconANGLE)](https://siliconangle.com/2026/08/25/data-center-power-startup-emerald-ai-raises-150m-at-1-05b-valuation/)
 - [GPU server idle power, industry estimate (Spheron)](https://www.spheron.network/blog/ai-inference-power-electricity-cost-2026/)
 - [Design and Analysis of Switchback Experiments](https://arxiv.org/abs/2009.00148v4)
 - [IPMVP options overview](https://www.electrical-installation.org/enwiki/How_to_evaluate_energy_savings)

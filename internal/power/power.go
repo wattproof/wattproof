@@ -76,6 +76,24 @@ func (c Curve) Idle() float64 { return c.points[0].Watts }
 // Peak is the power at load 1.
 func (c Curve) Peak() float64 { return c.points[len(c.points)-1].Watts }
 
+// WithIdleShare returns the curve with its idle power moved to share × peak,
+// keeping the peak and the curve's shape in between: every point keeps its
+// position between idle and peak. It is for sensitivity runs, because the idle
+// share is the number a published curve transfers worst to another server and
+// workload (docs/research/trace-analysis-plan.md).
+func (c Curve) WithIdleShare(share float64) (Curve, error) {
+	idle, peak := c.Idle(), c.Peak()
+	if share < 0 || share > 1 || peak <= idle {
+		return Curve{}, fmt.Errorf("%w: idle share %v of a curve from %v W to %v W", ErrBadCurve, share, idle, peak)
+	}
+	newIdle := share * peak
+	pts := make([]Point, len(c.points))
+	for i, p := range c.points {
+		pts[i] = Point{Load: p.Load, Watts: newIdle + (p.Watts-idle)*(peak-newIdle)/(peak-idle)}
+	}
+	return NewCurve(pts)
+}
+
 // Transition is the cost of switching a node off and on again.
 type Transition struct {
 	// Shutdown is the time from the end of the drain until the node is off.

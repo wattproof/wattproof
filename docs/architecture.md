@@ -28,9 +28,9 @@ So the largest lever on most clusters is **how many servers are powered**, not w
 |---|---|---|---|
 | Node power state | Drain spare capacity, power nodes off, power on ahead of demand | The idle power of every node that is off | v0.1 |
 | Node choice | Keep the most efficient nodes on; switch the least efficient off first | The efficiency gap between hardware generations | v0.1 |
-| CPU power settings | Energy-performance preference, governor, C-state limits per node class | Idle and dynamic power | v0.3 |
+| CPU power settings | Energy-performance preference, governor, C-state limits per node class | Idle and dynamic power | v0.4 (ADR-0014) |
 | Diurnal rightsizing | Lower CPU requests where and when usage is predictably low (in-place pod resize); memory stays at observed peak | Nothing directly; it frees capacity so more nodes can be off at night | v0.2, opt-in per workload |
-| GPU clocks | Lock clocks per workload class | GPU dynamic power | v0.4 |
+| GPU clocks | Lock SM clocks per serving phase, decode first; not power caps, which do not engage in decode | GPU dynamic power | v0.3 (ADR-0014) |
 | Placement | Energy-marginal scoring among powered nodes | A few percent, on mixed hardware only | later |
 | Time shifting | Run deferrable batch when power is cheap or low-carbon | Cost and CO2, not kWh | later |
 
@@ -252,6 +252,46 @@ A resize stuck in `PodResizePending` longer than a set time counts as a guard si
 requests are never changed. The controller needs `patch` on `pods/resize` and nothing more on
 pods.
 
+### GPU inference nodes (v0.3, ADR-0014)
+
+The same planner and actuators, applied to nodes that serve models
+([feature note](research/features/gpu-inference.md)). Three rules set it apart from the CPU path.
+
+**Wattproof reads replica counts; it never sets them.** The operator's autoscaler decides how
+many replicas each model needs: an HPA, KEDA, KServe, the Dynamo Planner or ScaleOps. Wattproof
+reads the result through the `scale` subresource of the Deployment, StatefulSet or serving
+resource, so it works under any of them. What it decides is which GPU nodes are powered and which
+nodes the replicas land on, through the same taints as on CPU nodes. Optional adapters read the
+serving stack's own signals (queue length, KV-cache load) as forecast features, never as commands.
+
+**Power-on lead time includes the model.** On a GPU node the time from power-on to serving is
+boot, plus model load, plus warm-up: 6–10 minutes for model load alone in published systems. The
+planner learns this per model and node class from measured history and powers nodes on that far
+ahead of the forecast ramp. Opt-in: once a node is up, the agent pre-stages the models it is
+expected to serve on local disk, so a replica the autoscaler adds loads from local NVMe instead of
+network storage.
+
+**Capacity with a taker is not powered off.** If a batch queue (Kueue, Slurm, Volcano) can use
+freed GPUs, Wattproof reports them as freed capacity and leaves the nodes on. It powers off only
+capacity with no taker.
+
+**Planned on smoothed load, with a cycle budget.** Inference load is bursty at the minute scale.
+Planned on a 5-minute average, the simulated planner powered each GPU node off 3–6 times a day;
+on a 30-minute average, about once, at almost the same energy
+([notebook](notebook/2026-10-09-gpu-inference-simulation.md)). The GPU planner plans on load
+averaged over at least 30 minutes, and each node has a budget of power cycles per day.
+
+Two additions to the guard and actuators:
+
+- **Health check before work.** A GPU node that has been powered on is uncordoned only after a
+  GPU health check (DCGM diagnostics, quick level) passes. A failure keeps it cordoned, records it
+  in the power-cycle record and raises an alert.
+- **Clock actuator.** The node agent locks SM clocks through NVML per node class and serving
+  phase: decode first, prefill at full clocks unless its latency target allows less. It never
+  uses power caps for decode, where they do not engage. Where NVIDIA's Workload Power Profile
+  Solution is installed, its Max-Q inference profile is the actuator instead of Wattproof's own
+  clock table. The kill switch restores default clocks.
+
 ### Guard
 
 Watches service-level indicators that the operator defines as `ServiceLevel` resources (PromQL
@@ -302,7 +342,10 @@ Group `energy.wattproof.de/v1alpha1`.
 ## Autonomy modes
 
 - **Observe.** Fit models and compute plans; act on nothing. Report what would have been done and
-  the model-estimated saving, labelled as an estimate.
+  the model-estimated saving, labelled as an estimate. This includes the rightsizing report
+  ([ADR-0012](adr/0012-rightsizing-is-a-product-pillar.md)): recommended CPU and memory requests
+  per workload, and what they would free at peak in cores and servers and save off-peak in kWh.
+  It runs on any cluster with Prometheus, before a meter or power driver exists.
 - **Recommend.** Plans wait for approval (`kubectl annotate` or the UI).
 - **Act.** Plans execute within `EnergyPolicy` limits.
 

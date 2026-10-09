@@ -134,3 +134,22 @@ func TestTestdataCurves(t *testing.T) {
 		}
 	}
 }
+
+// Moving the idle share keeps the peak and each point's place between idle
+// and peak.
+func TestWithIdleShare(t *testing.T) {
+	c, err := NewCurve([]Point{{0, 100}, {0.5, 250}, {1, 400}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	d, err := c.WithIdleShare(0.5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !near(d.Idle(), 200) || !near(d.Peak(), 400) || !near(d.Watts(0.5), 300) {
+		t.Fatalf("idle %v, half %v, peak %v; want 200, 300, 400", d.Idle(), d.Watts(0.5), d.Peak())
+	}
+	if _, err := c.WithIdleShare(1.2); err == nil {
+		t.Fatal("share above 1 accepted")
+	}
+}

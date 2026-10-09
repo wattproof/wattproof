@@ -1,6 +1,6 @@
 # ADR-0004: Node power state is the first lever
 
-Status: accepted, 2026-09-26
+Status: accepted, 2026-09-26. The order of the later levers is amended by ADR-0014 (2026-10-09): GPU clocks in v0.3, CPU power settings in v0.4.
 
 ## Context
 A powered, idle server draws a substantial share of its peak power. A powered-off server draws a

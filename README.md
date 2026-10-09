@@ -12,10 +12,13 @@ Status: design. Nothing here is ready to install.
    Every number carries the class of meter it came from.
 2. **Learn.** Models of each node's power draw, boot time and the cluster's demand. They are
    fitted continuously and promoted only when they beat the model they replace.
-3. **Decide and act.** Keep the most efficient nodes powered, drain and power off the rest, and
+3. **Rightsize.** Lower CPU requests to what services use, hour by hour, through in-place pod
+   resize. On hardware you own this alone saves nothing: the freed capacity stays powered. So
+   Wattproof reports, and later acts on, what it frees in servers and watts.
+4. **Decide and act.** Keep the most efficient nodes powered, drain and power off the rest, and
    power them on again before demand needs them. Stock Kubernetes mechanisms only: taints, the
    eviction API, PodDisruptionBudgets.
-4. **Prove.** A controlled experiment keeps running, so the saving is measured, not estimated.
+5. **Prove.** A controlled experiment keeps running, so the saving is measured, not estimated.
 
 ## Documents
 
@@ -23,9 +26,11 @@ Status: design. Nothing here is ready to install.
 - [Measurement](docs/measurement.md)
 - [Experiment protocol](docs/experiment-protocol.md) (draft, registered before the first run)
 - [Decisions](docs/adr/)
-- [Related work](docs/research/related-work.md)
+- [Related work](docs/research/related-work.md) and [feature research](docs/research/features/)
 - [Roadmap](ROADMAP.md)
+- [What we publish, and when](docs/publishing.md)
 
 ## License
 
-Apache-2.0 (planned, see [ADR-0008](docs/adr/0008-open-source-boundary.md)).
+Apache-2.0 ([ADR-0008](docs/adr/0008-open-source-boundary.md)). Contributions are signed off under the
+Developer Certificate of Origin ([CONTRIBUTING.md](CONTRIBUTING.md)).

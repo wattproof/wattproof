@@ -18,3 +18,7 @@ dist/
 __pycache__/
 .ipynb_checkpoints/
 .DS_Store
+
+# Business tooling stays out of the public repository.
+.claude/skills/product-verdict/
+.claude/settings.local.json

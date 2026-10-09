@@ -3,6 +3,11 @@
 **Simulation, not a measurement** ([ADR-0011](../adr/0011-simulate-before-the-testbed.md)).
 Reproduce with `go run ./cmd/wattproof-sim`.
 
+**Correction, same day:** the rows with "fixed 50%" assumed that fixed-replica services use
+constant CPU. Their usage follows traffic. Corrected numbers are in
+[the request-shaping entry](2026-10-08-request-shaping.md). On mixed hardware with 50% fixed, T's
+margin over B1 falls from 1.6–1.8% to 0.4–0.6%. The rows with 0% fixed are unchanged.
+
 ## Question
 
 Before any hardware: on a small testbed, how much energy could Wattproof (T) save against stock
