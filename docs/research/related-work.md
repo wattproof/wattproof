@@ -88,6 +88,11 @@ The lever and its control policies are well studied. These results shape Wattpro
   2019). Google maps CPU usage to power per power domain across its fleet (Radovanovic et al.,
   IEEE Transactions on Power Systems 2023), and has published power traces for the same cells as its
   2019 cluster trace (Sakalkar et al., ASPLOS 2020).
+- **Power curves depend on load type and on the individual server.** On one server, CPU worklets
+  at the same 40% load drew 186.4 W to 243.5 W (von Kistowski et al., ICPE 2015). In clusters of
+  identical nodes, a model trained on one node and scaled up had worst-case errors up to 150% of
+  the dynamic range (Davis et al., IEEE CAL 2011). So every testbed server is profiled
+  ([features/power-profiling.md](features/power-profiling.md)).
 - **Bounding the saving with the Google trace.** Milocco et al. (IEEE TNSM 2020) used a 29-day
   Google trace to bound the energy-cost saving of proactive server management over reactive
   management. Read in full before any claim of novelty for forecasting.
@@ -218,3 +223,7 @@ policies. They are not workload-aware and do not consolidate.
 - [Design and Analysis of Switchback Experiments](https://arxiv.org/abs/2009.00148v4)
 - [IPMVP options overview](https://www.electrical-installation.org/enwiki/How_to_evaluate_energy_savings)
 - [Rebalancer](https://engineering.fb.com/2026/09/21/open-source/rebalancer-generic-high-performance-library-assignment-problems/)
+- [Power profiling feature note](features/power-profiling.md), with its sources, 2026-10-09
+- [von Kistowski et al., influences on server power for CPU-intensive workloads (ICPE 2015)](https://research.spec.org/icpe_proceedings/2015/icpe/p223.pdf)
+- [Davis et al., Including variability in large-scale cluster power models (IEEE CAL 2011)](https://www.microsoft.com/en-us/research/wp-content/uploads/2011/11/CAL_2011.pdf)
+- [SPEC SERT 2 metric](https://ssg.spec.org/sert2/SERT-metric.pdf)

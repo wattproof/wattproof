@@ -59,6 +59,64 @@ outlet.
 5. Store the raw data, the fit and the analyser's own calibration certificate date with the
    campaign.
 
+## Power profile
+
+Every server is profiled after calibration, at the start and the end of each campaign
+([feature note](research/features/power-profiling.md)). Each server gets two profiles: one
+measured the way SPECpower_ssj2008 measures, so it replaces a published SPECpower curve like for
+like, and a finer one for Wattproof's own models.
+
+### Profile S: the SPECpower method
+
+The SPECpower_ssj2008 benchmark itself, run on every server
+([run rules](https://www.spec.org/power/docs/SPECpower_ssj2008-Run_Reporting_Rules.html)):
+
+1. **Calibration:** the ssj workload runs unconstrained for three intervals; the maximum
+   throughput is the mean of the last two.
+2. **Levels:** 100% to 10% of that maximum in 10% steps, **in descending order**, then active idle
+   (ready, no transactions): 11 levels.
+3. **Timing:** 240-second measurement intervals, each with 30 seconds of ramp-up and 30 seconds of
+   ramp-down, and 10 seconds of zero activity between levels.
+4. **Result per level:** average active power and ssj_ops, in the same layout as the published
+   results in `testdata/specpower-*.csv`.
+
+Where we differ from a compliant run, and say so with every curve: the meter is the calibrated PDU
+outlet (class B) on all servers at once. SPEC's PTDaemon supports only accepted analysers, one
+instance per device, and a run measures one system. One server per hardware generation is also run
+with the analyser through PTDaemon. SPEC requires its review before any public use of ssj results,
+so Profile S curves stay internal unless a run is compliant and reviewed. Profile W is what we
+publish.
+
+### Profile W: Wattproof's profile
+
+1. **Load types.** A CPU stressor and a memory stressor (stress-ng), and the experiment's own
+   workload (`loadgen`). Each server's maximum throughput is measured per load type first, as in
+   Profile S.
+2. **Levels.** 100% down to 0% of that maximum in 5% steps, in descending order: 21 levels.
+   CPU utilisation is recorded next to each level. The steps are finer than SPEC's because curves
+   change shape between 10% steps (a steep rise between 80% and 90% load is typical), and the
+   planner works in that range.
+3. **Timing.** As in Profile S: 240-second measurement intervals with 30-second ramps.
+4. **Off and transitions.** 10 minutes off (BMC standby), then three shutdown-and-boot cycles,
+   each timed and metered from the end of the drain until off, and from power-on until the node
+   is Ready.
+5. **All servers at once,** on their calibrated outlets (class B, corrected). One server per
+   hardware generation is profiled a second time with the analyser in series (class A), to check
+   the corrected curve.
+
+### Both profiles
+
+- **Duration:** Profile S takes about 1.2 hours, Profile W about 7 hours for three load types plus
+  the off state and the cycles. Together they take two nights.
+- **Recorded with each profile:** BIOS power profile, firmware, inlet temperature, CPU
+  frequency and C-state residency, and the achieved throughput at every level.
+- **Published** with the raw samples (Profile W, and Profile S only after SPEC review): one curve
+  per server and load type (`load,watts`), off power, and transition times and energies.
+- **Comparison:** where a testbed server's model has a published SPECpower result, its Profile S
+  curve is compared with it. The difference measures how far a published rating is from the same
+  model measured in a rack, the error the rightsizing report carries when it uses published
+  curves.
+
 ## Time
 
 All meters, nodes and the recorder synchronise with chrony against the same source. The recorder

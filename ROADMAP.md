@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: v1.3, 2026-10-09. It replaces v1.2 of the same day, v1.1 and v1 of 2026-10-08 and draft v0 of 2026-09-26. The business track lives separately
+Status: v1.4, 2026-10-09. It replaces v1.3 and v1.2 of the same day, v1.1 and v1 of 2026-10-08 and draft v0 of 2026-09-26. The business track lives separately
 and refers to these phases by number.
 
 Wattproof has three pillars: **rightsize, power state, verify**
@@ -13,6 +13,17 @@ the rightsizing report (Phase 1R), because it needs no testbed and it is what an
 first.
 
 Every phase ends in tests that can fail. A green suite that cannot go red proves nothing.
+
+## What changed in v1.4
+
+- **Every server gets two measured power profiles before the experiments** (Phase 2,
+  [feature note](docs/research/features/power-profiling.md)): Profile S runs the SPECpower_ssj2008
+  benchmark itself, so it replaces a published SPECpower curve like for like; Profile W is ours,
+  with 21 levels, three load types, off-state power and transitions. Load type changes power by up
+  to 57 W at the same load level on one server, and identical servers differ, so the simulator's
+  prior comes from these profiles, not from published ratings.
+- **New software in Phase 1:** an analyser driver, a load runner and `wattproof-profile`. A
+  SPECpower_ssj2008 licence is needed for Profile S.
 
 ## What changed in v1.3
 
@@ -89,21 +100,25 @@ October, before the BigQuery quota resets:
 4. **Phase 0 remaining** and the **testbed decision by 25 Oct**.
 5. **Phase 1: the Redfish driver** against DMTF's mockup server; it is needed on every route.
 6. **`wattproof-report`, first cut** (Phase 1R step 4), reading the trace file before Prometheus.
+7. **Power profiling software** (Phase 1): the load runner, the analyser driver and
+   `wattproof-profile`, tested against fakes before T0. It must be ready on the testbed's first
+   day, because profiling comes before the A/A pilot. **Buy the SPECpower_ssj2008 licence**
+   (owner: Arman) and do a non-compliant trial run on one machine before T0.
 
 November:
-7. **Alibaba 2018**, locally; **Google cell g** on BigQuery with check 3.
-8. **Decision rules across both operators**; restate Experiment 2's prior (E2).
-9. **Rerun the product verdict** with both operators' results.
-10. **Prototype Fund (30 Nov)**: the lab notebook page carries the simulation results, the
+8. **Alibaba 2018**, locally; **Google cell g** on BigQuery with check 3.
+9. **Decision rules across both operators**; restate Experiment 2's prior (E2).
+10. **Rerun the product verdict** with both operators' results.
+11. **Prototype Fund (30 Nov)**: the lab notebook page carries the simulation results, the
     negative ones included.
-11. ~~Decide ADR-0014~~: accepted 2026-10-09.
-12. **Phase 1G access**: a GPU node with a wall meter at a GPU operator or research centre, otherwise one
+12. ~~Decide ADR-0014~~: accepted 2026-10-09.
+13. **Phase 1G access**: a GPU node with a wall meter at a GPU operator or research centre, otherwise one
     rented node with BMC readings (class C), stated as such.
-13. ~~Simulator inference mode~~ on the Azure 2024 week: done 2026-10-09
+14. ~~Simulator inference mode~~ on the Azure 2024 week: done 2026-10-09
     ([notebook](docs/notebook/2026-10-09-gpu-inference-simulation.md)). GPU power state clears the
     5% rule at every idle draw and load time tested; bursty load makes the planner cycle nodes 3–6
     times a day unless it plans on a 30-minute average.
-14. **GPU planner: smoothed input and a cycle budget per node per day**, simulated before Phase 1G
+15. **GPU planner: smoothed input and a cycle budget per node per day**, simulated before Phase 1G
     reports.
 
 ## Phase 0: Foundations (weeks 1–3, from 28 Sep 2026)
@@ -229,13 +244,32 @@ If T0 arrives before Phase 1R is done, Phase 1 and Phase 2 take priority.
   - **The chosen testbed's meter**, and only that one: the Kwollect API for Grid'5000's
     wattmeters, SNMP for an outlet-metered PDU (tested against recorded SNMP data), or SCPI for a
     reference analyser (tested against a fake instrument).
+- **The analyser driver** (SCPI over Ethernet for the Yokogawa WT310E), on every route that
+  calibrates against the analyser. SPEC's PTDaemon cannot be used: it ships only inside SPEC's
+  licensed suites. Tested against a fake instrument.
 - Recorder writing Prometheus metrics and immutable Parquet files. Gap detection.
 - `wattproof-calibrate`: runs the five-point calibration and writes the fit and report.
+- **Power profiling** ([feature note](docs/research/features/power-profiling.md),
+  [measurement.md](docs/measurement.md#power-profile)):
+  - a load runner that finds a server's maximum throughput for a load type, then holds a target
+    fraction of it: stress-ng for the CPU and memory types, `loadgen` for the experiment's
+    workload;
+  - `wattproof-profile`: runs both profiles on all servers at once. Profile S starts the licensed
+    SPECpower_ssj2008 benchmark on each server and reads its levels and ssj_ops; Profile W runs
+    the load runner (levels, load types, off state, shutdown and boot through the power driver).
+    It reads the recorder's data and writes one curve per server, profile and load type in the
+    simulator's format (`load,watts`), plus off-state power and transition times and energies
+    (`internal/power.Node`). It also writes the per-server report offered to testbed providers.
 
 Exit tests:
 - A synthetic power trace with known energy integrates exactly (to float tolerance). Done.
 - A 6-second gap is flagged and never interpolated. Done.
 - Each driver passes its contract test against its mock.
+- Against a fake meter that follows a known curve, `wattproof-profile` recovers every level's power
+  within float tolerance, and its output loads with `power.ReadCurve` unchanged.
+- The load runner holds each target level within ±2 percentage points of the target throughput
+  over the measured window, or the level is flagged and repeated.
+- A level whose window has a meter gap above the 1% rule is flagged, never silently averaged.
 - On hardware, once available: every PDU outlet calibrates against the analyser with residual
   below 0.5% at all five points, or is excluded.
 
@@ -287,12 +321,30 @@ Before T0, on kind:
 
 From T0:
 - Install Kubernetes on the testbed. Record the method, versions and BIOS settings as code.
+- Calibrate every PDU outlet against the analyser, then **profile every server**
+  ([measurement.md](docs/measurement.md#power-profile)), all servers at once on their calibrated
+  outlets, over two nights:
+  - Profile S: the SPECpower_ssj2008 benchmark, 11 levels by its rules;
+  - Profile W: 21 levels in 5% steps, three load types, off state and three shutdown-and-boot
+    cycles.
+  One server per hardware generation is profiled again with the analyser in series. Repeat the
+  profiles at the end of the campaign. Profile W and its raw data are published under the dataset
+  rule; Profile S only after SPEC's review.
 - The recorder pushes aggregates to object storage; the page shows power, node states, the
   running arm, load and latency.
 - A/A pilot: B0 against B0 over enough blocks to estimate block-to-block noise. The pilot also
   measures carryover: how long one arm still shows after the next one starts.
 
 Exit tests:
+- Every server has a profile for each load type, with no flagged level left unrepeated.
+- On the servers profiled twice, the calibrated-outlet curve and the analyser curve agree within
+  1% at every level, or the difference is carried as uncertainty in every prediction.
+- With the measured profiles in place of SPECpower, the simulator reproduces each server's measured
+  energy over one replayed load day within a tolerance fixed before the run (starting value 2%),
+  for Profile S and for Profile W separately. If it does not, the cause is found and stated before
+  the registered prior is computed.
+- Where a testbed server's model has a published SPECpower result, the difference between it and
+  that server's Profile S is reported at every level.
 - B1 completes 50 automated power cycles with no stuck node.
 - The live page shows data less than 5 minutes old, and the testbed accepts no inbound connection
   from the internet (checked with an external port scan).
@@ -323,7 +375,8 @@ Exit tests:
 
 ## Phase 4: Registered experiment (T0 + 6 to T0 + 9 weeks)
 
-- Run the simulator on the testbed's measured curves and record its prediction in the protocol.
+- Run the simulator on the testbed's measured profiles (Phase 2) and record its prediction in the
+  protocol.
 - Freeze [experiment-protocol.md](docs/experiment-protocol.md) and register it on OSF before the
   first T block runs.
 - Run the blocks. Monitor meter gaps daily, holidays included: the blocks run unattended.
