@@ -5,6 +5,12 @@ inputs are now measured: Google cluster trace 2019, cell a ([previous entry](202
 Evidence level E2 in the trace analysis plan's terms. One operator only; the second (Alibaba) is
 still to come.
 
+> **Correction (2026-10-09):** readings 1 and 2 first said that T+R used 4–58% more energy than
+> B1+VPA in every row, and that ignoring memory overstated rightsizing by 8–18 points. The table
+> shows 2–58% more in 23 of 24 rows and level in the last (0.997), and 7–29 points. Reading 5
+> said a higher idle share makes every arm save more; on mixed hardware at 30% idle some arms
+> save less than at the published share (corrected 2026-10-16). The conclusions are unchanged.
+
 Reproduce:
 
     go run ./cmd/wattproof-traceprep -in cell_a.csv -out testdata/google2019-cella-services.csv
@@ -56,19 +62,21 @@ groups; every Wattproof arm for none. No arm overloaded CPU or node memory.
 
 ## Reading
 
-1. **CPU-only rightsizing loses to VPA once memory counts.** T+R uses 4–58% more energy than B1+VPA
-   in every row. VPA also shrinks memory requests; once CPU requests are small, memory decides how
+1. **CPU-only rightsizing loses to VPA once memory counts.** T+R uses 2–58% more energy than B1+VPA
+   in 23 of 24 rows and draws level in the last (0.997: daily cycle, mixed hardware, published
+   idle). VPA also shrinks memory requests; once CPU requests are small, memory decides how
    many servers stay on, and T+R leaves memory where it was.
-2. **Ignoring memory overstated rightsizing by 8–18 points.** T+R/T is 0.84–0.98 with memory and
-   0.70–0.87 without. Every earlier rightsizing number in this notebook is too optimistic.
+2. **Ignoring memory overstated rightsizing by 7–29 points.** T+R/T is 0.75–0.98 with memory and
+   0.56–0.87 without. Every earlier rightsizing number in this notebook is too optimistic.
 3. **With memory rightsized too (T+RM), Wattproof beats VPA only on mixed hardware**, by 1–10%, for
    the broad groups. On identical servers it is 1–8% worse; for the decision group (sized by hand,
    daily cycle) 9–30% worse.
 4. **The plan's decision rule holds.** For services sized by hand with a daily cycle (peak ratio
    0.45), there is no energy claim of rightsizing against B1+VPA.
 5. **Power state still pays against stock Kubernetes.** B1/B0 0.73–0.87 and T/B0 0.79–0.91; on
-   mixed hardware T beats B1 in most rows, on identical servers B1 wins. A higher idle share makes
-   every arm save more, and favours B1+VPA a little more than T+R.
+   mixed hardware T beats B1 in 7 of 12 rows, on identical servers B1 wins. A higher idle share
+   makes B1+VPA and T+RM save more in every group, and the other arms in most; it favours B1+VPA a
+   little more than T+R.
 6. **Wattproof's consistent edge is service level:** no pending pods in any row, against up to 16
    minutes for B1+VPA.
 

@@ -6,9 +6,9 @@ ADR-0010, which already allows memory requests down to the observed peak plus a 
 ## Context
 The trace-calibrated simulation ([notebook](../notebook/2026-10-08-trace-simulation.md), Google
 2019 cell a) shows that once CPU requests are rightsized, memory decides how many servers stay on.
-CPU-only rightsizing (T+R) used 4–58% more energy than B1+VPA in all 24 scenarios, because VPA
-lowers memory requests as well. With memory set to the learned weekly peak plus 15% (T+RM),
-Wattproof used 1–10% less than B1+VPA on mixed hardware, and 1–8% more on identical servers.
+CPU-only rightsizing (T+R) used 2–58% more energy than B1+VPA in 23 of 24 scenarios and drew level
+in the last (0.997), because VPA lowers memory requests as well. With memory set to the learned
+weekly peak plus 15% (T+RM), Wattproof used 1–10% less than B1+VPA on mixed hardware, and 1–8% more on identical servers.
 
 Every rightsizing tool found already lowers memory requests: VPA by default, Google's Autopilot,
 CAST AI, ScaleOps (including on-premises), StormForge and PerfectScale

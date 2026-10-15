@@ -1,8 +1,9 @@
 # 2026-10-08: Simulating request shaping (v0.2)
 
 > **Correction (2026-10-08, later):** this entry ignores memory. With memory as a second limit
-> and inputs from the Google trace, CPU-only rightsizing uses more energy than B1+VPA in every
-> scenario, and its gain over T was overstated by 8–18 points. See the
+> and inputs from the Google trace, CPU-only rightsizing uses more energy than B1+VPA in 23 of
+> 24 scenarios and draws level in the last, and its gain over T was overstated by 7–29 points
+> (figures corrected 2026-10-09). See the
 > [trace simulation](2026-10-08-trace-simulation.md).
 
 **Simulation, not a measurement** ([ADR-0011](../adr/0011-simulate-before-the-testbed.md)).

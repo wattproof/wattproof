@@ -145,12 +145,12 @@ of its memory against 80% of its CPU, so memory binds once CPU is rightsized.
 
 From the [trace simulation](../../notebook/2026-10-08-trace-simulation.md):
 
-- CPU-only rightsizing (T+R) uses 4–58% more energy than B1+VPA in every scenario. VPA lowers
-  memory requests too.
+- CPU-only rightsizing (T+R) uses 2–58% more energy than B1+VPA in 23 of 24 scenarios and draws
+  level in the last (0.997). VPA lowers memory requests too.
 - With memory set to the learned weekly peak plus 15% (T+RM): 1–10% less than B1+VPA on mixed
   hardware, 1–8% more on identical servers, 9–30% more for the services sized by hand with a daily
   cycle. The plan's decision rule (peak ratio below 0.5) predicted no energy claim there, and holds.
-- Ignoring memory had overstated rightsizing by 8–18 points.
+- Ignoring memory had overstated rightsizing by 7–29 points.
 - Wattproof leaves no pods pending; B1+VPA leaves them pending 5–16 minutes over four weeks.
 
 ### Memory rightsizing among the alternatives
