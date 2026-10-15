@@ -16,3 +16,10 @@ The cell is written into each query as `clusterdata_2019_a`; replace it for anot
 
 Always dry-run first and keep the byte cap. Queries are passed on standard input, because `bq`
 reads a leading `#` or `--` line on the command line as a flag.
+
+## Slurm job tables
+
+`slurm_idle.py` implements the [Slurm trace analysis plan](../../docs/research/slurm-trace-plan.md)
+on SURF Lisa's job table (Zenodo 11028934, CC-BY-4.0). It reads parquet through DuckDB:
+
+    uv run --no-project --with duckdb python -I slurm_idle.py <dir with the two parquet files>
