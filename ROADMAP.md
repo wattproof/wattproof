@@ -1,6 +1,6 @@
 # Roadmap
 
-Status: v1.5, 2026-10-09. It replaces v1.4, v1.3 and v1.2 of the same day, v1.1 and v1 of 2026-10-08 and draft v0 of 2026-09-26. The business track lives separately
+Status: v1.6, 2026-10-16. It replaces v1.5 of 2026-10-09, v1.4, v1.3 and v1.2 of the same day, v1.1 and v1 of 2026-10-08 and draft v0 of 2026-09-26. The business track lives separately
 and refers to these phases by number.
 
 Wattproof has three pillars: **rightsize, power state, verify**
@@ -13,6 +13,18 @@ the rightsizing report (Phase 1R), because it needs no testbed and it is what an
 first.
 
 Every phase ends in tests that can fail. A green suite that cannot go red proves nothing.
+
+## What changed in v1.6
+
+- **Slurm clusters** ([ADR-0015](docs/adr/0015-slurm-observe-and-verify-first.md), proposed;
+  [feature note](docs/research/features/slurm.md)). Slurm already powers idle nodes off; no
+  measured saving with a counterfactual was found. On Slurm, Wattproof observes and verifies
+  first: a Slurm report from accounting data, and Verify study V2 at a site that agrees. Acting on
+  Slurm waits for V2. None of it moves T0 or v0.1.
+- **The README and the architecture say what works without Kubernetes.**
+- **Correction:** CPU-only rightsizing loses to B1+VPA in 23 of 24 scenarios and draws level in
+  the last, not "in every scenario"; ignoring memory overstated it by 7–29 points, not 8–18
+  ([notebook](docs/notebook/2026-10-08-trace-simulation.md)).
 
 ## What changed in v1.5
 
@@ -57,8 +69,9 @@ Every phase ends in tests that can fail. A green suite that cannot go red proves
 
 - **Measured inputs changed the rightsizing picture** ([trace simulation](docs/notebook/2026-10-08-trace-simulation.md),
   Google 2019 cell a, one operator). Once CPU requests are rightsized, memory decides how many
-  servers stay on. CPU-only rightsizing loses to B1+VPA on energy in every scenario; with memory
-  rightsized too, Wattproof wins only on mixed hardware (1–10%). The v1.1 statement below that
+  servers stay on. CPU-only rightsizing loses to B1+VPA on energy in 23 of 24 scenarios and draws
+  level in the last; with memory rightsized too, Wattproof wins only on mixed hardware (1–10%).
+  The v1.1 statement below that
   rightsizing is "the larger lever" no longer holds.
 - **Memory rightsizing is proposed** ([ADR-0013](docs/adr/0013-memory-rightsizing.md)). Every
   rightsizing tool found already does it ([feature note](docs/research/features/rightsizing.md#update-2026-10-09-what-the-traces-changed)),
@@ -137,6 +150,13 @@ November:
     times a day unless it plans on a 30-minute average.
 15. **GPU planner: smoothed input and a cycle budget per node per day**, simulated before Phase 1G
     reports.
+
+When a Slurm site offers data (ADR-0015), not before:
+16. **Decide ADR-0015.** Owner: Arman.
+17. **Slurm report, first cut**, from the site's exported `sacct`, `sreport` and node-event data:
+    idle node-hours by partition and hour of week, and the energy they draw. After Phase 1R step 4.
+18. **Verify study V2**: the site's own power saving against none, if the site agrees to the
+    switchback and meters are available. Pilot first.
 
 ## Phase 0: Foundations (weeks 1–3, from 28 Sep 2026)
 
@@ -237,8 +257,9 @@ Hand-sized services with a daily cycle use a weighted median of 45% of their CPU
 the services' load is flatter than assumed (mean 79% of peak); memory would bind once CPU is
 rightsized; idle power is a larger share than the SPECpower curves assume. The simulator changes
 are done ([notebook](docs/notebook/2026-10-08-trace-simulation.md)): with memory counted,
-CPU-only rightsizing uses more energy than B1+VPA in every scenario; with memory rightsized too, it
-wins only on mixed hardware (1–10%); Wattproof leaves no pods pending where B1+VPA does.
+CPU-only rightsizing uses more energy than B1+VPA in 23 of 24 scenarios and draws level in the
+last; with memory rightsized too, it wins only on mixed hardware (1–10%); Wattproof leaves no
+pods pending where B1+VPA does.
 
 November (BigQuery quota resets on 1 November):
 - Alibaba 2018, locally: stream the 28 GB download once, aggregate online-service containers into
@@ -491,7 +512,7 @@ clusters are out of scope ([feature note](docs/research/features/gpu-inference.m
 
 - **Wattproof Verify, June to November 2027**, if the Prototype Fund accepts it. The measurement
   and experiment engine is extracted into a standalone, neutral toolkit that can verify any
-  energy-saving measure in a Kubernetes cluster, not only Wattproof's. It adds:
+  energy-saving measure in a Kubernetes or Slurm cluster, not only Wattproof's. It adds:
   - field meter drivers with explicit uncertainty;
   - an adapter interface for switching arbitrary interventions;
   - a report generator with reproducibility bundles;

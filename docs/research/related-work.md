@@ -1,7 +1,7 @@
 # Related work
 
-Researched 2026-09-27, research section added 2026-10-08, GPU inference added 2026-10-09. What exists, what it does, and where
-Wattproof differs.
+Researched 2026-09-27, research section added 2026-10-08, GPU inference added 2026-10-09, Slurm added 2026-10-16. What
+exists, what it does, and where Wattproof differs.
 
 ## The lever is old; adoption is the problem
 
@@ -142,6 +142,21 @@ The lever and its control policies are well studied. These results shape Wattpro
 | Canonical MAAS | Bare-metal provisioning with a power-control API (IPMI, Redfish). Power-off on low demand must be scripted by the user. | A possible power driver, not a planner. |
 | Vertical Pod Autoscaler | Rightsizes requests. In-place pod resize is GA since Kubernetes 1.35 (December 2025), and VPA's InPlaceOrRecreate mode is beta. | Mechanism for diurnal rightsizing (ADR-0010). |
 
+## Slurm and HPC
+
+Slurm powers idle nodes off itself, after a fixed idle timer per partition, through scripts each
+site writes. Jülich reports 25% less annual energy on JUSUF after enabling it, 2022 against 2023
+(Suarez et al., arXiv 2411.16204); DTU estimates its saving from node-hours down times an assumed
+250 W. Neither has a counterfactual. Details in [features/slurm.md](features/slurm.md).
+
+| Project | What it does | Relation to Wattproof |
+|---|---|---|
+| Slurm power saving | `SuspendProgram` and `ResumeProgram` after `SuspendTime` idle; resumes when a job is allocated, so the job waits for the boot. GPL-2.0. | The B1 of a Slurm site. What Verify study V2 measures. |
+| DTU Slurm_tools `power_save` | IPMI suspend and resume scripts. GPL-3.0. | An actuator, like our power driver. |
+| EAR (BSC, Lenovo) | Energy-aware runtime with a Slurm plugin: CPU and GPU frequency per job, accounting. In production on SuperMUC-NG since 2019. | Frequency, not power state. |
+| ClusterCockpit | Job-specific performance and energy monitoring. MIT. Experimental energy control for exclusive jobs (2026). | Monitoring; node sensors, not wall meters. |
+| SPARS, SNF-ICON | Trace simulators for power-aware HPC scheduling with predictive wake-up (2025, 2026). | Research prior art for forecasting the power-on. Simulation only. |
+
 ## Commercial, Kubernetes efficiency (cloud-first)
 
 - **ScaleOps:** $130M Series C in March 2026, valuation above $800M; autonomous pod rightsizing.
@@ -227,3 +242,7 @@ policies. They are not workload-aware and do not consolidate.
 - [von Kistowski et al., influences on server power for CPU-intensive workloads (ICPE 2015)](https://research.spec.org/icpe_proceedings/2015/icpe/p223.pdf)
 - [Davis et al., Including variability in large-scale cluster power models (IEEE CAL 2011)](https://www.microsoft.com/en-us/research/wp-content/uploads/2011/11/CAL_2011.pdf)
 - [SPEC SERT 2 metric](https://ssg.spec.org/sert2/SERT-metric.pdf)
+- [Slurm feature note](features/slurm.md), with its sources, 2026-10-16
+- [Slurm Power Saving Guide](https://slurm.schedmd.com/power_save.html)
+- [Suarez et al., Energy-aware operation of HPC systems in Germany (arXiv 2411.16204)](https://arxiv.org/abs/2411.16204)
+- [Nielsen, Power Saving with Slurm, SLUG'23](https://slurm.schedmd.com/SLUG23/DTU-SLUG23.pdf)

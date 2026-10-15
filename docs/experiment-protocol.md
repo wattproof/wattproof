@@ -193,8 +193,8 @@ registered separately before its first treatment block.
   CPU pressure (PSI), resize latency, and the count of deferred or infeasible resizes.
 - **Memory (if [ADR-0013](adr/0013-memory-rightsizing.md) is accepted):** the Wattproof arm also
   rightsizes memory (T+RM), because B1+VPA does. In the trace-calibrated simulation, CPU-only T+R
-  used more energy than B1+VPA in every scenario. OOM kills and memory-pressure evictions become
-  non-inferiority endpoints.
+  used more energy than B1+VPA in 23 of 24 scenarios and drew level in the last. OOM kills and
+  memory-pressure evictions become non-inferiority endpoints.
 - **Capacity (secondary):** peak requested cores and peak powered servers per block. Power state
   lowers energy off-peak but not the peak; rightsizing can lower both
   ([ADR-0012](adr/0012-rightsizing-is-a-product-pillar.md)).
@@ -264,6 +264,35 @@ the GPUs are about half of a GPU server's power.
 
 Runs on the Phase 1G node in the same access window, if the operator agrees.
 
+## Verify study V2: Slurm power saving at a production site (outline)
+
+The second study of Wattproof Verify, for clusters scheduled by Slurm
+([ADR-0015](adr/0015-slurm-observe-and-verify-first.md)). Slurm's own power saving is measured as
+the site runs it; Wattproof does not act on the cluster. Run only at a site that agrees, on
+partitions it chooses.
+
+| Arm | Configuration |
+|---|---|
+| S0 | Power saving off on the partition (`SuspendTime=INFINITE`). |
+| S1 | The site's own power saving: its `SuspendTime`, exclusions and scripts. |
+
+- **Unit and blocks:** a whole partition, in switchback blocks of one day, because nodes in one
+  partition share one queue and cannot form separate arms. The arm changes at a fixed hour through
+  `scontrol reconfigure`, set by the site's administrators from a published randomised schedule.
+  The first hours after a switch are excluded; the length is set from the pilot.
+- **Primary endpoint:** wall energy per delivered node-hour (GPU-hour on GPU partitions), with the
+  meter class stated. Class C (BMC) is acceptable here only with its uncertainty reported, and a
+  class A spot check on at least one node.
+- **Secondary and non-inferiority:** job wait time at p50 and p95 by job size; time jobs spend
+  waiting for nodes to boot (CONFIGURING); failed resumes and requeued jobs; power cycles per node
+  and hardware failures within seven days of a cycle, by server model.
+- **Load:** production jobs, not replayed. Load differs between days, so the analysis adjusts for
+  delivered node-hours and the queue's backlog, both fixed before the first block. The power of
+  such a design is low; the pilot decides how many weeks it needs, and if the site cannot give
+  them, the result is reported as a measured estimate, not a test.
+- **Neutrality:** the site's configuration is measured as it runs. The result is published
+  whatever it shows, with the data, in the form the site agrees to.
+
 ## Experiment 3: GPU inference (outline)
 
 Registered after Phase 1G and the simulation, on a multi-node GPU testbed.
@@ -280,6 +309,11 @@ Registered after Phase 1G and the simulation, on a multi-node GPU testbed.
   waiting for a model to load; power cycles and failed health checks per node.
 
 ## Changes to this draft
+
+2026-10-16:
+
+- Verify study V2 outlined: Slurm's own power saving, measured at a production site
+  ([ADR-0015](adr/0015-slurm-observe-and-verify-first.md)).
 
 2026-10-09:
 

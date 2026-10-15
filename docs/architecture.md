@@ -130,6 +130,25 @@ flowchart LR
   X --> REP[Report]
 ```
 
+## What depends on Kubernetes
+
+v0.1 targets Kubernetes, but most of the system does not depend on it. The scheduler is an
+adapter: it supplies cluster state (nodes, what runs where, pending demand) and applies power
+steps in the scheduler's own terms ([ADR-0015](adr/0015-slurm-observe-and-verify-first.md)).
+
+| Independent of the scheduler | Kubernetes adapter (v0.1) | Slurm adapter (proposed) |
+|---|---|---|
+| Meter drivers, calibration, meter classes | Node and pod state from the API server | Node and job state from `slurmctld` and the accounting database |
+| Power profiles per server | Drain through the eviction API, respecting PodDisruptionBudgets | Slurm drains nothing for Wattproof; it powers off only nodes Slurm reports idle |
+| Power, transition and demand models | Taints keep the scheduler off draining and powered-off nodes | `SuspendExcNodes`, `SuspendExcStates` and node `Weight` |
+| Power driver (Redfish, IPMI, Wake-on-LAN) | Called by the planner | Called by Slurm as `SuspendProgram` and `ResumeProgram` |
+| Simulator, experiment engine, report | Rightsizing report and resize controller (requests exist only in Kubernetes) | Idle node-hours and job wait from `sacct` and `sreport` |
+| Recorder (Prometheus, Parquet) | Helm chart, CRDs | A service on the Slurm controller's management network |
+
+On Slurm, Slurm keeps scheduling. The first Slurm pieces observe and verify (the Slurm report and
+Verify study V2); acting comes later, if at all. Details in the
+[Slurm feature note](research/features/slurm.md).
+
 ## Components
 
 ### Meters

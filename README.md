@@ -20,6 +20,24 @@ Status: design. Nothing here is ready to install.
    eviction API, PodDisruptionBudgets.
 5. **Prove.** A controlled experiment keeps running, so the saving is measured, not estimated.
 
+## Without Kubernetes
+
+The controller in v0.1 is written for Kubernetes: it moves work off a node through the eviction
+API before powering the node off. The rest does not depend on Kubernetes:
+
+- measuring wall power per server, from a reference analyser, metered PDUs or the BMC (Redfish,
+  IPMI), with the class of every number stated;
+- power profiles per server: what each one draws off, idle and under load, and its break-even
+  time for a power cycle;
+- the simulator and the experiment protocol, which measure a saving against a randomised
+  counterfactual whatever the scheduler.
+
+For Slurm clusters, Slurm already powers idle nodes off with its own power saving. The plan is to
+measure first: a report from Slurm's accounting data on idle node-hours and what they draw, and a
+randomised measurement of what Slurm's power saving saves at the wall and costs in job wait
+([ADR-0015](docs/adr/0015-slurm-observe-and-verify-first.md), proposed;
+[feature note](docs/research/features/slurm.md)). Wattproof does not schedule Slurm jobs.
+
 ## Documents
 
 - [Architecture](docs/architecture.md)
