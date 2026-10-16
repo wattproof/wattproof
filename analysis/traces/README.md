@@ -37,3 +37,6 @@ where present, `slurm_pub` node counts, laid out as in the archive:
 
 `slurm_replace.py` is the re-placement check both idle scripts use: whether a start that finds its
 node powered off could have used an idle node of the same hardware type that was still on.
+
+`slurm_m100_nodeday.py` checks a Marconi100 period's job table against power: node-days with no
+job should draw the idle level. It is the evidence that the 2021 job table misses running work.

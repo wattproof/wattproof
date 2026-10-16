@@ -30,8 +30,9 @@ def main():
     ap.add_argument("--threads", type=int, default=4)
     ap.add_argument("--memory", default="8GB")
     ap.add_argument("--tmp", required=True, help="directory DuckDB may spill to")
-    ap.add_argument("--check", choices=("auto", "power"), default="auto",
-                    help="complete days by Slurm's counts where present (auto), or by power only")
+    ap.add_argument("--check", choices=("auto", "power", "jobs"), default="auto",
+                    help="complete days by Slurm's node counts where present, else by Slurm's job "
+                         "record (auto); or by power, or by the job record, alone")
     a = ap.parse_args()
     con = duckdb.connect()
     con.sql(f"SET threads={a.threads}; SET memory_limit='{a.memory}'; SET temp_directory='{a.tmp}'")
@@ -133,23 +134,42 @@ def main():
             JOIN read_parquet('{sp % "total_nodes_mixed"}') m USING (timestamp) GROUP BY 1""")
     except duckdb.IOException:
         con.sql("CREATE TABLE sc (d DOUBLE, sb DOUBLE)")
+    #  jobs:   at least 95% of the job ids Slurm records as ending that day (slurm_pub job_id, one
+    #          row per finished job) are in the job table (plan change of 2026-10-16).
+    try:
+        cov = dict(con.sql(f"""
+            WITH r AS (SELECT DISTINCT floor(epoch(timestamp) / 86400) * 86400 AS d, value AS job_id
+                       FROM read_parquet('{sp % "job_id"}'))
+            SELECT d, AVG((j.job_id IS NOT NULL)::INT) FROM r LEFT JOIN jobs j USING (job_id)
+            GROUP BY d""").fetchall())
+    except duckdb.IOException:
+        cov = {}
     dl = con.sql("""SELECT days.d, mean_w, COALESCE(busy, 0), sb FROM days
                     LEFT JOIN jb USING (d) LEFT JOIN sc USING (d) ORDER BY 1""").fetchall()
     N = len(nodes)
     days_in = [(d, mw, jb, sb) for d, mw, jb, sb in dl if w0 <= d and d + 86400 <= w1]
     ok_p = {d for d, mw, jb, sb in days_in if abs(mw / (mi + (mb - mi) * jb / N) - 1) <= 0.10}
     ok_c = {d for d, mw, jb, sb in days_in if sb and 0.8 <= jb / sb <= 1.25}
+    ok_j = {d for d, *_ in days_in if cov.get(d, 0) >= 0.95}
     with_c = [d for d, *_, sb in days_in if sb]
+    with_j = [d for d, *_ in days_in if d in cov]
     print(f"days in window {len(days_in)}; complete by power {len(ok_p)}; with Slurm counts "
-          f"{len(with_c)}, complete by counts {len(ok_c)}")
-    if with_c:
-        agree = sum((d in ok_p) == (d in ok_c) for d in with_c)
-        print(f"power check agrees with counts check on {agree} of {len(with_c)} days "
-              f"({agree / len(with_c):.0%}); power-complete days that counts reject: "
-              f"{len([d for d in with_c if d in ok_p and d not in ok_c])}")
-    by_counts = bool(with_c) and a.check == "auto"
-    good = sorted(ok_c) if by_counts else sorted(ok_p)
-    print("complete days by:", "counts" if by_counts else "power")
+          f"{len(with_c)}, complete by counts {len(ok_c)}; with Slurm's job record {len(with_j)}, "
+          f"complete by it {len(ok_j)}")
+    cv = sorted(cov[d] for d in with_j)
+    if cv:
+        print(f"job record coverage per day: median {cv[len(cv) // 2]:.1%}, 10th percentile "
+              f"{cv[len(cv) // 10]:.1%}, minimum {cv[0]:.1%}")
+    for name, ok in (("power", ok_p), ("jobs", ok_j)):
+        if with_c:
+            agree = sum((d in ok) == (d in ok_c) for d in with_c)
+            print(f"{name} check agrees with counts check on {agree} of {len(with_c)} days "
+                  f"({agree / len(with_c):.0%}); days it passes that counts reject: "
+                  f"{len([d for d in with_c if d in ok and d not in ok_c])}, that counts pass and it "
+                  f"rejects: {len([d for d in with_c if d not in ok and d in ok_c])}")
+    by = a.check if a.check != "auto" else "counts" if with_c else "jobs"
+    good = sorted({"counts": ok_c, "power": ok_p, "jobs": ok_j}[by])
+    print("complete days by:", by)
     spans = merge([[d, d + 86400] for d in good])
     cover = sum(e - s for s, e in spans)
     con.executemany("INSERT INTO spans VALUES (?, ?)", spans)

@@ -145,3 +145,21 @@ One site is not enough: the same rule as in the [trace analysis plan](trace-anal
   say how much the results move, so 2020 is also run with the power check alone, and the
   difference in idle share, delayed starts and saving is reported. 2021 (power check only) is read
   with that difference as its uncertainty. Stated before the power-only run.
+- **Result of that run, and a third check.** With the power check alone, 2020 reads 3.6 points
+  more idle, a 4.4–4.6 points larger saving and 1.1 points more delayed starts (after
+  re-placement) than with the counts check: it passes days with missing jobs, because a 10% band on
+  mean power hides a tenth of the busy nodes going missing. So 2021 gets a direct check instead.
+  Slurm's own record of finished jobs (`slurm_pub`, `metric=job_id`: one row per job, at its end,
+  in 2020 and 2021) is compared with the job table: **a day is complete if at least 95% of the
+  job ids Slurm records as ending that day are in the job table.** Fixed before the check was
+  run. It is calibrated on 2020 as the power check was (agreement with the counts check, and 2020
+  run with it alone); 2021 uses it in place of the counts, and the power check is dropped.
+- **2021 fails on data quality and is not used.** The job-record check passed every 2021 day
+  (coverage 99–100%), but the run showed idle nodes drawing more than busy ones (997 W against
+  820 W). Node-days on which the job table shows no job drew a median of 823–851 W in February,
+  April and June 2021, 75–84% of them above 700 W; in 2020 such node-days drew about 540 W
+  (except after the job table ends on 13 October). The job table misses much of the running work,
+  and Slurm's job record misses the same jobs, so it is not an independent check. On 2020 it
+  agreed with the counts check on 110 of 137 days and moved the results by at most half a point,
+  because 2020's gaps are fewer. A 2021 analysis would need idle defined from power, stated and
+  validated on 2020 first. Not done.

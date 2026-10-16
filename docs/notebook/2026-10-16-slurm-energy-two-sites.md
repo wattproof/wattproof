@@ -95,8 +95,9 @@ starts on Lisa's CPU nodes, 13% on its GPU nodes and 44% on Marconi100.
 
 - Two sites, both without power saving in the period. A site already running it has no saving
   left to find, only the waits.
-- Marconi100 2020 was its first production year: 60% idle in May, 20% in October. The second
-  period (January to June 2021) is the replication; see below.
+- Marconi100 2020 was its first production year: 60% idle in May, 20% in October. The planned
+  replication on January to June 2021 failed on data quality (below), so Marconi100 rests on one
+  period.
 - First order: delayed jobs delay nothing else, and re-placement does not follow the skipped node.
   Job wait in real queues compounds; the re-placement bound may remove more or fewer waits than
   Slurm would.
@@ -104,7 +105,36 @@ starts on Lisa's CPU nodes, 13% on its GPU nodes and 44% on Marconi100.
 - No node states on Lisa: down and idle cannot be told apart; gaps of 72 hours or more are a
   proxy, and every result is also computed with them counted as idle (in the scripts' output).
 
+## Checking Marconi100's job table
+
+A missing job reads as idle time, so the job table's completeness decides every Marconi100 figure.
+Three day-level checks were compared on 2020, where Slurm's own node counts exist (the
+[plan](../research/slurm-trace-plan.md#changes-to-this-plan) states each before its run):
+
+| 2020, `SuspendTime` 30 min | By Slurm's node counts (used) | By power alone | By Slurm's job record alone |
+|---|---|---|---|
+| Days passed | 109 of 137 | 125 | 138 |
+| Agreement with the counts check | | 78% of days | 80% of days |
+| Idle share by month above Slurm's own | +1 to +2 points | up to +11 | +1 to +3 |
+| Saving | 26.7–27.8% | 31.1–32.4% | 27.2–28.3% |
+| Delayed after re-placement | 4.16% | 5.27% | 4.53% |
+
+The power check (mean node power within 10% of the job table's prediction) is too loose: a tenth
+of the busy nodes going missing barely moves a day's mean power.
+
+**January to June 2021 is not used.** It has no node counts, and the job-record check passed every
+day, yet the run gave idle nodes a higher draw than busy ones (997 W against 820 W). A direct check
+([`slurm_m100_nodeday.py`](../../analysis/traces/slurm_m100_nodeday.py)) shows why: on days the
+job table shows a node with no job, that node drew a median of 823–851 W in February, April and
+June 2021, with 75–84% of those node-days above 700 W. In 2020 such node-days drew about 540 W,
+except after the job table ends on 13 October. The 2021 job table misses much of the running work,
+and Slurm's job record misses the same jobs. The 2020 figures do not depend on that record: they
+use Slurm's node counts, against which the job table's monthly idle share agrees within 1–2
+points.
+
 ## Next
 
-1. Marconi100 2020 with the power check alone, to size its effect, then January to June 2021.
-2. A Slurm planner simulation against the forecast bound, if the 2021 replication holds.
+1. A Slurm planner simulation against the forecast bound: the waits left after re-placement, at
+   the cost of 0.1–1.0 points of saving.
+2. A second clean Slurm period or site for replication. For Marconi100 2021, that would mean idle
+   time defined from power, stated and validated on 2020 first.
