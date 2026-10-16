@@ -131,7 +131,10 @@ October, before the BigQuery quota resets:
    higher than Google's method and misses the correlation bar (0.943 against 0.95), recorded as a
    failed check ([plan](docs/research/trace-analysis-plan.md#changes-after-the-first-results)).
 4. **Phase 0 remaining** and the **testbed decision by 25 Oct**.
-5. **Phase 1: the Redfish driver** against DMTF's mockup server; it is needed on every route.
+5. ~~**Phase 1: the Redfish driver**~~: first cut done 2026-10-16
+   ([`internal/meter/redfish`](internal/meter/redfish/)). Reads, resets and records quirks; passes
+   its contract test against DMTF's mockup files and DMTF's mockup server. Still to do: session
+   authentication (some BMCs refuse basic auth), and a run against a real BMC on the testbed.
 6. **`wattproof-report`, first cut** (Phase 1R step 4), reading the trace file before Prometheus.
 7. **Power profiling software** (Phase 1): the load runner, the analyser driver and
    `wattproof-profile`, tested against fakes before T0. It must be ready on the testbed's first
@@ -310,7 +313,8 @@ If T0 arrives before Phase 1R is done, Phase 1 and Phase 2 take priority.
 Exit tests:
 - A synthetic power trace with known energy integrates exactly (to float tolerance). Done.
 - A 6-second gap is flagged and never interpolated. Done.
-- Each driver passes its contract test against its mock.
+- Each driver passes its contract test against its mock (`internal/meter/metertest`). Redfish:
+  done 2026-10-16, against DMTF's public-rackmount1 mockup.
 - Against a fake meter that follows a known curve, `wattproof-profile` recovers every level's power
   within float tolerance, and its output loads with `power.ReadCurve` unchanged.
 - The load runner holds each target level within ±2 percentage points of the target throughput
