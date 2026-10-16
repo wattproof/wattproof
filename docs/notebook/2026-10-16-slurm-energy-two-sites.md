@@ -132,11 +132,35 @@ and Slurm's job record misses the same jobs. The 2020 figures do not depend on t
 use Slurm's node counts, against which the job table's monthly idle share agrees within 1–2
 points.
 
+## Energy at equal wait (added 2026-10-16, after the rule was written)
+
+The plan's [new rule](../research/slurm-trace-plan.md#changes-to-this-plan) judges a planner by
+the energy it could add without more waits than Slurm's timer: ΔE = the forecast bound's saving at
+`SuspendTime` 10 minutes minus the reactive saving at 30 minutes, in points of measured energy.
+Computed by [`slurm_delta_e.py`](../../analysis/traces/slurm_delta_e.py) from the outputs above;
+a rough Marconi100 reading (about 1.6 points at a 5-minute boot) had been seen before the rule
+was written.
+
+| | Lisa CPU | Lisa GPU | Marconi100 2020 |
+|---|---|---|---|
+| ΔE, boot 5 min (off 10 / 30 W) | +0.15 / +0.01 | +0.58 / +0.55 | +1.50 / +1.44 |
+| ΔE, boot 15 min | +0.02 / −0.03 | +0.17 / +0.16 | +0.48 / +0.46 |
+| Lowest (decides) | −0.03 | +0.16 | +0.46 |
+| Boot wait at 30 min, per 1,000 nodes per year (5 / 15 min boot) | 18,652 / 55,951 node-hours | 17,022 / 51,066 | 34,679 / 104,036 |
+
+**The lowest ΔE is below 1 point everywhere, so by the rule a Slurm planner is dropped.** A perfect
+forecast with a 10-minute timer gains at most 1.5 points over a 30-minute timer, and only with a
+5-minute boot; with a 15-minute boot it gains under half a point. What a forecast could still buy
+is the waits in the last row: on a 1,000-node cluster like Marconi100, 35,000–104,000 node-hours a
+year of nodes held for a boot. That is a service-level question for a site, and the Slurm report
+can show it; it is not an energy lever.
+
+Reading 4 above, written under the 1%-of-starts rule, is superseded: the planner is dropped, not
+kept.
+
 ## Next
 
-1. A Slurm planner simulation against the forecast bound. Since 2026-10-16 its target is energy
-   at equal wait, which replaces the 1%-of-starts rule used in the reading above
-   ([plan change](../research/slurm-trace-plan.md#changes-to-this-plan)); Lisa and Marconi100 are
-   recomputed under it first.
+1. ~~A Slurm planner simulation~~: dropped by the energy-at-equal-wait rule (above). Slurm work is
+   the report and Verify study V2 ([ADR-0015](../adr/0015-slurm-observe-and-verify-first.md)).
 2. A second clean Slurm period or site for replication. For Marconi100 2021, that would mean idle
    time defined from power, stated and validated on 2020 first.

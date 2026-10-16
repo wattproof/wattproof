@@ -48,5 +48,10 @@ Most research computing centres and many GPU clusters run Slurm, not Kubernetes.
   two sites, E2): a 30-minute timer alone would save 18–28% of GPU-node energy at sites that run
   without power saving; perfect foresight adds nothing to that, and would remove the boot waits of
   3–4% of job starts that remain after Slurm's own placement.
+- Energy at equal wait (2026-10-16, same traces, rule stated before the recompute): a perfect
+  forecast adds under 1 point of energy over a 30-minute timer on every site and node class at the
+  pessimistic end of the assumptions, so the forecast planner described above is dropped. What
+  remains for acting on Slurm is the power driver as `SuspendProgram` and `ResumeProgram`,
+  `Weight` and recommended settings.
 - Holding BMC credentials on a production HPC site needs the same threat model and security
   review as a Kubernetes design partner (ROADMAP v0.3).

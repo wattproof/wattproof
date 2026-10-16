@@ -189,3 +189,18 @@ One site is not enough: the same rule as in the [trace analysis plan](trace-anal
 - **Where it applies.** To every site and period opened from now on. Lisa and Marconi100 2020 are
   recomputed under it and labelled as computed after the rule was written: a rough reading of
   Marconi100's output, about 1.6 points at a 5-minute boot, had been seen before writing it.
+- **Result, computed after the rule was written**
+  ([`slurm_delta_e.py`](../../analysis/traces/slurm_delta_e.py), from the stored outputs of the
+  three scripts). ΔE in points of measured energy, at off draw 10 / 30 W:
+
+  | Site and class | Boot 5 min | Boot 15 min | Lowest | Reference delayed (after re-placement) | Boot wait per 1,000 nodes per year (5 / 15 min boot) |
+  |---|---|---|---|---|---|
+  | Lisa CPU | +0.15 / +0.01 | +0.02 / −0.03 | −0.03 | 3.08% | 18,652 / 55,951 node-hours |
+  | Lisa GPU | +0.58 / +0.55 | +0.17 / +0.16 | +0.16 | 0.76% | 17,022 / 51,066 |
+  | Marconi100 2020 | +1.50 / +1.44 | +0.48 / +0.46 | +0.46 | 4.16% | 34,679 / 104,036 |
+
+  **Below 1 point on every site and node class: by the rule, a Slurm planner is dropped.** Only
+  Marconi100 at a 5-minute boot clears the bar (1.4–1.5 points, the rough reading seen before the
+  rule); at a 15-minute boot, within the 10–15 minutes HPC sites report, a third of it is left. A
+  forecast's value on Slurm is the waits it removes, not energy; that is reported, not built.
+  Slurm work stays the report and Verify study V2.

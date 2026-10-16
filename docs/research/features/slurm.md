@@ -154,6 +154,16 @@ This confirms judgement 2: no energy claim against stock power saving; the case 
 planner is job wait, now bounded on two sites. The report's first finding at a site without power
 saving would be the saving it leaves on the table.
 
+## Update 2026-10-16: energy at equal wait
+
+Under the plan's [energy-at-equal-wait rule](../slurm-trace-plan.md#changes-to-this-plan), a perfect
+forecast with a 10-minute timer gains −0.03 to +0.46 points of energy over a 30-minute timer at the
+pessimistic end of the assumptions (Lisa CPU, Lisa GPU, Marconi100), and at most 1.5 points with a
+5-minute boot ([notebook](../../notebook/2026-10-16-slurm-energy-two-sites.md#energy-at-equal-wait-added-2026-10-16-after-the-rule-was-written)).
+Below the 1-point bar everywhere, so **a Slurm planner is dropped**. Acting on Slurm, if a site asks
+for it, means Wattproof's power driver as `SuspendProgram` and `ResumeProgram` and recommended
+settings, not a forecast.
+
 ## Sources
 
 - [Slurm Power Saving Guide](https://slurm.schedmd.com/power_save.html)

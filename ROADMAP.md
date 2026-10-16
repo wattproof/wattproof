@@ -21,6 +21,11 @@ Every phase ends in tests that can fail. A green suite that cannot go red proves
   measured saving with a counterfactual was found. On Slurm, Wattproof observes and verifies
   first: a Slurm report from accounting data, and Verify study V2 at a site that agrees. Acting on
   Slurm waits for V2. None of it moves T0 or v0.1.
+- **No Slurm planner.** Under the energy-at-equal-wait rule, a perfect forecast adds under
+  1 point of energy over Slurm's 30-minute timer on both public sites at a 15-minute boot
+  ([notebook](docs/notebook/2026-10-16-slurm-energy-two-sites.md#energy-at-equal-wait-added-2026-10-16-after-the-rule-was-written)).
+  On Slurm, Wattproof reports and verifies; acting would be the power driver behind Slurm's own
+  power saving.
 - **The README and the architecture say what works without Kubernetes.**
 - **Correction:** CPU-only rightsizing loses to B1+VPA in 23 of 24 scenarios and draws level in
   the last, not "in every scenario"; ignoring memory overstated it by 7–29 points, not 8–18
