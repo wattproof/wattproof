@@ -140,7 +140,14 @@ October, before the BigQuery quota resets:
    ([`internal/meter/redfish`](internal/meter/redfish/)). Reads, resets and records quirks; passes
    its contract test against DMTF's mockup files and DMTF's mockup server. Still to do: session
    authentication (some BMCs refuse basic auth), and a run against a real BMC on the testbed.
-6. **`wattproof-report`, first cut** (Phase 1R step 4), reading the trace file before Prometheus.
+6. ~~**`wattproof-report`, first cut**~~: done 2026-10-16 ([`cmd/wattproof-report`](cmd/wattproof-report/)).
+   Reads a per-workload trace file; recommends CPU per hour of the week and memory (ADR-0013);
+   reports exclusions with reasons, freed CPU, memory and nodes at the peak, the ratio
+   distribution, and B0, T and T+RW energy from `internal/sim`. Four of the six exit tests pass
+   (below); it ran on Google cell a's 13,469 services in seconds, with an invented 16-node
+   inventory, so no energy figure from that run is a result. Still to do: Prometheus input;
+   holding nodes on for node-local storage in the simulator (until then the report lists them and
+   skips energy); excluding VPA and `Utilization` HPA workloads automatically.
 7. **Power profiling software** (Phase 1): the load runner, the analyser driver and
    `wattproof-profile`, tested against fakes before T0. It must be ready on the testbed's first
    day, because profiling comes before the A/A pilot. The SPECpower_ssj2008 licence is
@@ -283,6 +290,13 @@ November (BigQuery quota resets on 1 November):
 - Then apply the plan's decision rules across both operators and restate Experiment 2's prior.
 - A decision record on memory: rightsizing competes on energy only if it includes memory, which
   ADR-0012 rules out today. [ADR-0013](docs/adr/0013-memory-rightsizing.md), accepted 2026-10-16.
+
+Status 2026-10-16: `wattproof-report` first cut. Exit tests passing: hand-computed requests and
+freed CPU on a synthetic cluster; excluded workloads get no recommendation and each has its reason;
+B0 and T energy equal a direct simulator run (T+RW checked for fewer powered node-hours than T);
+it completes on Google cell a and reports the ratio distribution. Open: the trace checks (check 2
+failed, recorded in the plan; check 3 waits for cell g) and the test with memory requests at 100%
+of capacity, which belongs to the simulator.
 
 If T0 arrives before Phase 1R is done, Phase 1 and Phase 2 take priority.
 
