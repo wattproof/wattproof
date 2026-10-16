@@ -14,7 +14,7 @@ Queries and analysis in [`analysis/traces/`](../../analysis/traces/). One scan, 
 |---|---|---|---|
 | 1. Production CPU usage ÷ limits, month | 0.388 | 0.20–0.40 | Pass |
 | 1. Production memory usage ÷ limits, month | 0.546 | 0.50–0.80 | Pass |
-| 2. Hourly tier shape against Google's notebook | not yet compared | | Open |
+| 2. Hourly tier shape against Google's notebook (checked 2026-10-16) | r 0.97–1.00, except production memory 0.943; totals 2–5% above Google's method | r ≥ 0.95, totals within 10% | Fail on production memory, see the plan's change log |
 | 3. Usage dropped by the request join | not computable from this output | < 1% | Deviation, see the plan's change log |
 | 4. Power-domain CPU total ÷ tier total | 0.9999 | 0.99–1.01 | Pass |
 
@@ -90,4 +90,6 @@ Over the day, CPU usage swings 13–14% of its peak and power 4–6%: batch work
   out-of-sample weeks, power curves ±10% (replaced by an idle-share sweep, see the plan's change
   log). Then the trace series as simulator input. Done: [trace simulation](2026-10-08-trace-simulation.md).
 - The second operator (Alibaba 2018) and cell g (November quota).
-- Check 2 against Google's notebook.
+- Check 2 against Google's notebook. Done 2026-10-16: the daily shape matches; production
+  memory reads 1–5.5% higher than Google's method and misses the correlation bar
+  ([plan](../research/trace-analysis-plan.md#changes-after-the-first-results)).

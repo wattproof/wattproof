@@ -172,3 +172,33 @@ These rules read simulator output, so they are applied after simulator changes 1
   storage cannot hold it, so the 28 GB download is streamed once and aggregated without unpacking.
   Cell g runs on BigQuery with the November quota and records the usage dropped by the request join
   (check 3).
+- **2026-10-16, check 2, stated before the query ran.** Google's analysis notebook stores no
+  outputs, so there is no published shape to compare with. Its query for hourly usage by tier is
+  run on cell a unchanged ([`google2019_notebook_tiers.sql`](../../analysis/traces/google2019_notebook_tiers.sql),
+  547 GB, within October's remaining quota) and compared with the tier rows of the cell a scan,
+  summed into the same hours and divided by the same capacity. The methods differ in three ways:
+  the notebook takes the priority per instance, not per collection; it drops usage windows shorter
+  than 5 minutes; and it needs no request join. **Check 2 passes if, for the production and mid
+  tiers, the hourly CPU and memory series correlate at r ≥ 0.95 and their monthly totals agree
+  within 10%.** Because the notebook needs no request join, the gap in totals may also bound the
+  usage that join drops (check 3), if our totals come out lower: the other two differences move it
+  too.
+- **2026-10-16, check 2 result: fails on one of eight measures.** Production and mid tiers, 743
+  full hours ([`google2019_check2.py`](../../analysis/traces/google2019_check2.py)):
+
+  | Tier | r, CPU | r, memory | Ours ÷ Google's, CPU | Memory |
+  |---|---|---|---|---|
+  | Production | 0.974 | **0.943** | 1.032 | 1.024 |
+  | Mid | 0.998 | 0.999 | 1.049 | 1.033 |
+
+  Production memory misses the bar. It is nearly flat: its hourly standard deviation is 1.5% of
+  the cell's memory, and the difference between the two methods (0.5%) is a third of that, so a
+  small level difference costs much correlation. The gap is in level, not in shape: ours is 1–2%
+  higher on most days and 3–5.5% higher in the last week. The hour-of-day profile of production
+  plus mid CPU runs parallel, about 1 point of capacity higher. **Read as: our query reproduces
+  Google's daily shape, and puts production memory 1–5.5% higher than Google's method.** Results
+  that rest on the production memory level carry that range; the check is recorded as failed, and
+  the bar is not moved. Ours is higher in every tier, so the comparison gives no bound on check 3,
+  which stays open. Which difference causes the gap (windows under 5 minutes, which we count by
+  length and the notebook drops, or priority per instance) needs another scan: the cell g query in
+  November will also total usage in windows under 5 minutes.

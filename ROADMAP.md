@@ -126,8 +126,10 @@ October, before the BigQuery quota resets:
 2. ~~Simulate the trailing-window memory rule~~: done 2026-10-16
    ([notebook](docs/notebook/2026-10-16-memory-trailing-window.md)). 0.18–0.33% of memory usage
    above the request against VPA's 0.72–1.58%: the condition for ADR-0013 is met.
-3. **Check 2**: compare cell a's hourly tier shape with Google's analysis notebook, from the data
-   already downloaded.
+3. ~~**Check 2**~~: done 2026-10-16. The notebook stores no outputs, so its query was run on
+   October's remaining quota (547 GB). The daily shape matches; production memory reads 1–5.5%
+   higher than Google's method and misses the correlation bar (0.943 against 0.95), recorded as a
+   failed check ([plan](docs/research/trace-analysis-plan.md#changes-after-the-first-results)).
 4. **Phase 0 remaining** and the **testbed decision by 25 Oct**.
 5. **Phase 1: the Redfish driver** against DMTF's mockup server; it is needed on every route.
 6. **`wattproof-report`, first cut** (Phase 1R step 4), reading the trace file before Prometheus.
@@ -167,9 +169,12 @@ Done:
 - `internal/energy` (energy from power or counters, gap rules) and `internal/meter` (driver
   interface, meter classes).
 
+Also done (checked 2026-10-16): staticcheck in CI; `go 1.25`, which controller-runtime v0.23 and
+client-go v0.35 require. The first exit test was run locally: a deliberately failing test fails
+`go test`, which fails the CI job, and the suite passes once it is removed.
+
 Remaining:
-- CI: staticcheck now; a dependency license check once there are dependencies.
-- `go 1.25`, which controller-runtime v0.23 and client-go v0.35 require.
+- A dependency license check in CI, once there are dependencies.
 - Testbed track: send the requests to Grid'5000, a research computing centre and hosting
   providers. The requirements are in the protocol's Testbed section and in
   [measurement.md](docs/measurement.md). **Decide by 25 Oct (week 4).**

@@ -7,6 +7,11 @@ public Google 2019 cluster trace in BigQuery (`google.com:google-cluster-data`),
 |---|---|---|
 | `google2019_cell_check.sql` | Tier totals on a 1% block sample, to check the query before the full scan | about 5 GB |
 | `google2019_cell.sql` | One scan: per-service hourly usage and requests, tier totals and power-domain totals per 5 minutes | about 507 GB |
+| `google2019_notebook_tiers.sql` | Check 2: hourly usage by tier with the method of Google's analysis notebook, unchanged | about 547 GB |
+
+`google2019_check2.py` compares the two (check 2):
+
+    uv run --no-project --with duckdb python -I google2019_check2.py <cell_a.csv> <notebook_tiers.csv>
 
 The cell is written into each query as `clusterdata_2019_a`; replace it for another cell.
 
