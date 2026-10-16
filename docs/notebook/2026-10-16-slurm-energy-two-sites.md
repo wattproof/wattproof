@@ -134,7 +134,9 @@ points.
 
 ## Next
 
-1. A Slurm planner simulation against the forecast bound: the waits left after re-placement, at
-   the cost of 0.1–1.0 points of saving.
+1. A Slurm planner simulation against the forecast bound. Since 2026-10-16 its target is energy
+   at equal wait, which replaces the 1%-of-starts rule used in the reading above
+   ([plan change](../research/slurm-trace-plan.md#changes-to-this-plan)); Lisa and Marconi100 are
+   recomputed under it first.
 2. A second clean Slurm period or site for replication. For Marconi100 2021, that would mean idle
    time defined from power, stated and validated on 2020 first.

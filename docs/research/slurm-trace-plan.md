@@ -163,3 +163,29 @@ One site is not enough: the same rule as in the [trace analysis plan](trace-anal
   agreed with the counts check on 110 of 137 days and moved the results by at most half a point,
   because 2020's gaps are fewer. A 2021 analysis would need idle defined from power, stated and
   validated on 2020 first. Not done.
+
+2026-10-16, after both sites' results and before any new site or period is opened:
+
+- **The 1%-of-starts rule is replaced by energy at equal wait.** The share of delayed starts does
+  not grow with a cluster, and it says nothing about energy: a site that accepts some waits gets
+  more energy from a shorter timer, and a forecast can give that energy without the waits. So the
+  planner is judged by the energy it could add while waiting no more than Slurm's timer does.
+- **Measure, per site and node class:** ΔE = the forecast bound's saving at `SuspendTime`
+  10 minutes (the shortest tested; a real forecast cannot power off the moment a node goes idle)
+  minus the reactive saving at the reference `SuspendTime` of 30 minutes, at the same boot time and
+  off draw, in points of the node class's measured energy. The forecast bound has no boot waits,
+  so ΔE is energy gained with fewer waits than the reference, never more. It is an upper bound: the
+  forecast is perfect.
+- **Reported next to it, not as a bar:** the reference policy's delayed starts after re-placement,
+  and its boot wait in node-hours per 1,000 nodes per year, so that sites of different size compare.
+- **Decision rule.** ΔE is taken at the 10 W and 30 W off draws and at the 5 and 15-minute boots,
+  and the lowest of the four decides. If it is below **1 point** on every site and node class, a
+  Slurm planner is dropped: 1 point is about the spread that the unmeasured off draw alone puts on
+  the saving (0.9 points on Lisa's GPU nodes, 1.1 on Marconi100), so a smaller gain cannot be told
+  from the assumptions.
+  Otherwise the lowest ΔE is the planner's target: in simulation with a forecast it could actually
+  run, it must reach at least half of it with no more delayed starts than the reference, before
+  any build. The 5% rule on the powered-off share is unchanged.
+- **Where it applies.** To every site and period opened from now on. Lisa and Marconi100 2020 are
+  recomputed under it and labelled as computed after the rule was written: a rough reading of
+  Marconi100's output, about 1.6 points at a 5-minute boot, had been seen before writing it.
