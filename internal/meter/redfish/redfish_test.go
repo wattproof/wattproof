@@ -3,6 +3,7 @@ package redfish
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -29,10 +30,18 @@ const (
 type mock struct {
 	t     *testing.T
 	edits map[string]func(map[string]any) map[string]any
-	user  string // required basic-auth user, if set
+	user  string // required user, if set (password "secret")
+	// sessionOnly refuses basic authentication: requests need the token of
+	// a session opened at /redfish/v1/SessionService/Sessions.
+	sessionOnly bool
 
-	mu    sync.Mutex
-	posts []post
+	mu        sync.Mutex
+	posts     []post
+	tokens    map[string]bool // open sessions
+	logins    int
+	deletes   []string
+	basicSeen bool
+	refused   int // requests answered 401
 }
 
 type post struct {
@@ -45,13 +54,50 @@ func newMock(t *testing.T) *mock {
 }
 
 func (m *mock) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	if m.user != "" {
-		if u, p, ok := r.BasicAuth(); !ok || u != m.user || p != "secret" {
+	path := strings.TrimSuffix(r.URL.Path, "/")
+	m.mu.Lock()
+	_, _, basic := r.BasicAuth()
+	m.basicSeen = m.basicSeen || basic
+	if path == sessionsPath && r.Method == http.MethodPost {
+		var b map[string]string
+		_ = json.NewDecoder(r.Body).Decode(&b)
+		if m.user != "" && (b["UserName"] != m.user || b["Password"] != "secret") {
+			m.mu.Unlock()
 			http.Error(w, `{"error":{"code":"Base.1.0.NoValidSession"}}`, http.StatusUnauthorized)
 			return
 		}
+		m.logins++
+		tok := fmt.Sprintf("token-%d", m.logins)
+		if m.tokens == nil {
+			m.tokens = map[string]bool{}
+		}
+		m.tokens[tok] = true
+		m.mu.Unlock()
+		w.Header().Set("X-Auth-Token", tok)
+		w.Header().Set("Location", fmt.Sprintf("%s/%d", sessionsPath, m.logins))
+		w.WriteHeader(http.StatusCreated)
+		return
 	}
-	path := strings.TrimSuffix(r.URL.Path, "/")
+	authed := m.user == "" && !m.sessionOnly
+	if tok := r.Header.Get("X-Auth-Token"); tok != "" {
+		authed = m.tokens[tok]
+	} else if u, p, ok := r.BasicAuth(); ok && !m.sessionOnly {
+		authed = authed || (u == m.user && p == "secret")
+	}
+	if !authed {
+		m.refused++
+		m.mu.Unlock()
+		http.Error(w, `{"error":{"code":"Base.1.0.NoValidSession"}}`, http.StatusUnauthorized)
+		return
+	}
+	if r.Method == http.MethodDelete && strings.HasPrefix(path, sessionsPath+"/") {
+		m.deletes = append(m.deletes, path)
+		delete(m.tokens, r.Header.Get("X-Auth-Token"))
+		m.mu.Unlock()
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+	m.mu.Unlock()
 	if r.Method == http.MethodPost {
 		var b map[string]any
 		if err := json.NewDecoder(r.Body).Decode(&b); err != nil {
@@ -277,6 +323,102 @@ func TestBasicAuth(t *testing.T) {
 	}
 }
 
+// expire ends every open session, as a BMC does when a session times out.
+func (m *mock) expire() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.tokens = nil
+}
+
+// A BMC that refuses basic authentication is read through a session; the
+// fallback is recorded; an ended session is renewed once; Close logs out.
+func TestSessionFallback(t *testing.T) {
+	m := newMock(t)
+	m.user, m.sessionOnly = "wattproof", true
+	d := m.must(t)
+	if !hasQuirk(d.Inventory(), "basic authentication refused") {
+		t.Errorf("fallback not recorded: %q", d.Inventory().Quirks)
+	}
+	metertest.Contract(t, d, 3)
+	if m.logins != 1 {
+		t.Errorf("%d logins, want 1", m.logins)
+	}
+	m.expire()
+	readOne(t, d)
+	if m.logins != 2 {
+		t.Errorf("%d logins after the session ended, want 2", m.logins)
+	}
+	if err := d.Close(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	if len(m.deletes) != 1 || m.deletes[0] != sessionsPath+"/2" {
+		t.Errorf("logout deleted %q, want the second session", m.deletes)
+	}
+	if err := d.Close(context.Background()); err != nil || len(m.deletes) != 1 {
+		t.Errorf("second Close: err %v, deletes %q", err, m.deletes)
+	}
+}
+
+// When a session ends under concurrent reads, the driver logs in once.
+func TestSessionRenewedOnceUnderConcurrency(t *testing.T) {
+	m := newMock(t)
+	m.user, m.sessionOnly = "wattproof", true
+	d := m.must(t)
+	m.expire()
+	var wg sync.WaitGroup
+	for range 8 {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := d.Read(context.Background()); err != nil {
+				t.Error(err)
+			}
+		}()
+	}
+	wg.Wait()
+	if m.logins != 2 {
+		t.Errorf("%d logins, want 2 (the first and one renewal)", m.logins)
+	}
+}
+
+// With Session set, the driver never sends basic authentication, and resets
+// go through the session too.
+func TestSessionFromTheStart(t *testing.T) {
+	m := newMock(t)
+	m.user = "wattproof"
+	srv := httptest.NewServer(m)
+	defer srv.Close()
+	d, err := New(context.Background(), Config{Endpoint: srv.URL, Username: "wattproof", Password: "secret", Session: true, Client: srv.Client()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	readOne(t, d)
+	if err := d.Reset(context.Background(), d.Inventory().Systems[0], GracefulShutdown); err != nil {
+		t.Fatal(err)
+	}
+	if m.basicSeen || m.refused != 0 {
+		t.Errorf("Session set: basic authentication sent %v, %d requests refused", m.basicSeen, m.refused)
+	}
+	if m.logins != 1 || hasQuirk(d.Inventory(), "basic authentication refused") {
+		t.Errorf("%d logins, quirks %q", m.logins, d.Inventory().Quirks)
+	}
+}
+
+// A wrong password fails at the session login too, without leaking it.
+func TestSessionWrongPassword(t *testing.T) {
+	m := newMock(t)
+	m.user, m.sessionOnly = "wattproof", true
+	srv := httptest.NewServer(m)
+	defer srv.Close()
+	_, err := New(context.Background(), Config{Endpoint: srv.URL, Username: "wattproof", Password: "wrong", Client: srv.Client()})
+	if err == nil || !strings.Contains(err.Error(), "session login") || !strings.Contains(err.Error(), "401") {
+		t.Errorf("err = %v", err)
+	}
+	if err != nil && strings.Contains(err.Error(), "wrong") {
+		t.Errorf("error leaks the password: %v", err)
+	}
+}
+
 func TestLinkOffTheBMCIsRefused(t *testing.T) {
 	var offHost bool
 	other := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { offHost = true }))
@@ -353,7 +495,8 @@ func TestResetReadsActionInfo(t *testing.T) {
 //
 //	WATTPROOF_REDFISH_ENDPOINT=http://127.0.0.1:8000 go test -run TestLive -v ./internal/meter/redfish/
 //
-// Credentials, if needed, come from WATTPROOF_REDFISH_USER and _PASSWORD.
+// Credentials, if needed, come from WATTPROOF_REDFISH_USER and _PASSWORD; set
+// WATTPROOF_REDFISH_SESSION to log in to a session from the start.
 func TestLive(t *testing.T) {
 	ep := os.Getenv("WATTPROOF_REDFISH_ENDPOINT")
 	if ep == "" {
@@ -363,10 +506,16 @@ func TestLive(t *testing.T) {
 		Endpoint: ep,
 		Username: os.Getenv("WATTPROOF_REDFISH_USER"),
 		Password: os.Getenv("WATTPROOF_REDFISH_PASSWORD"),
+		Session:  os.Getenv("WATTPROOF_REDFISH_SESSION") != "",
 	})
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Cleanup(func() {
+		if err := d.Close(context.Background()); err != nil {
+			t.Errorf("logout: %v", err)
+		}
+	})
 	metertest.Contract(t, d, 3)
 	inv := d.Inventory()
 	t.Logf("Redfish %s, vendor %q, firmware %q, systems %q", inv.RedfishVersion, inv.Vendor, inv.Firmware, inv.Systems)

@@ -38,8 +38,14 @@ import (
 type Config struct {
 	// Endpoint is the BMC's base URL, e.g. https://10.0.0.5.
 	Endpoint string
-	// Username and Password are sent with HTTP basic authentication.
+	// Username and Password authenticate the driver: with HTTP basic
+	// authentication, or with a Redfish session if Session is set or the BMC
+	// refuses basic authentication.
 	Username, Password string
+	// Session logs in to a Redfish session at the first request instead of
+	// trying basic authentication first. Call Driver.Close to log out: BMCs
+	// allow few sessions at a time.
+	Session bool
 	// Client makes the requests; nil means http.DefaultClient. BMCs often
 	// use self-signed certificates: trust them in the client's TLS config.
 	Client *http.Client
@@ -113,16 +119,21 @@ func New(ctx context.Context, cfg Config) (*Driver, error) {
 		hc = http.DefaultClient
 	}
 	d := &Driver{
-		c:     client{base: base, user: cfg.Username, pass: cfg.Password, hc: hc},
+		c:     client{base: base, user: cfg.Username, pass: cfg.Password, hc: hc, session: cfg.Session},
 		now:   time.Now,
 		last:  map[string]time.Time{},
 		noted: map[string]bool{},
 	}
+	d.c.onFallback = func() { d.quirk("basic authentication refused (401); using a Redfish session") }
 	if err := d.discover(ctx); err != nil {
 		return nil, err
 	}
 	return d, nil
 }
+
+// Close logs out of the Redfish session, if the driver opened one. The driver
+// can still be used: the next request logs in again.
+func (d *Driver) Close(ctx context.Context) error { return d.c.logout(ctx) }
 
 // Class is C: a BMC.
 func (d *Driver) Class() meter.Class { return meter.ClassC }
@@ -469,11 +480,23 @@ func (d *Driver) wholeKWh(ch string, kWh float64) {
 	}
 }
 
-// client sends requests to one BMC and never follows a link off it.
+// sessionsPath is where a Redfish service accepts new sessions (DSP0266).
+const sessionsPath = "/redfish/v1/SessionService/Sessions"
+
+// client sends requests to one BMC and never follows a link off it. It
+// authenticates with basic authentication until the BMC refuses it, and from
+// then on with a session, which it renews when the BMC ends it.
 type client struct {
 	base       *url.URL
 	user, pass string
 	hc         *http.Client
+	onFallback func() // called once, when basic authentication is refused
+
+	loginMu  sync.Mutex // one login at a time
+	mu       sync.Mutex
+	session  bool
+	token    string // X-Auth-Token of the current session
+	location string // the session's resource, for logging out
 }
 
 func (c *client) url(path string) (string, error) {
@@ -493,45 +516,33 @@ func (c *client) get(ctx context.Context, path string, out any) error {
 }
 
 func (c *client) do(ctx context.Context, method, path string, body, out any) error {
-	u, err := c.url(path)
-	if err != nil {
-		return err
-	}
-	var rd io.Reader
-	if body != nil {
-		b, err := json.Marshal(body)
-		if err != nil {
+	c.mu.Lock()
+	session, token := c.session, c.token
+	c.mu.Unlock()
+	if session && token == "" {
+		var err error
+		if token, err = c.login(ctx, ""); err != nil {
 			return err
 		}
-		rd = bytes.NewReader(b)
 	}
-	req, err := http.NewRequestWithContext(ctx, method, u, rd)
+	status, data, err := c.send(ctx, method, path, body, session, token)
+	if status == http.StatusUnauthorized && (c.user != "" || c.pass != "") {
+		// Basic authentication refused, or the session ended: log in, once.
+		c.mu.Lock()
+		fallback := !c.session
+		c.session = true
+		c.mu.Unlock()
+		if fallback && c.onFallback != nil {
+			c.onFallback()
+		}
+		var lerr error
+		if token, lerr = c.login(ctx, token); lerr != nil {
+			return fmt.Errorf("%w; %w", err, lerr)
+		}
+		_, data, err = c.send(ctx, method, path, body, true, token)
+	}
 	if err != nil {
 		return err
-	}
-	req.Header.Set("Accept", "application/json")
-	req.Header.Set("OData-Version", "4.0")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	if c.user != "" || c.pass != "" {
-		req.SetBasicAuth(c.user, c.pass)
-	}
-	resp, err := c.hc.Do(req)
-	if err != nil {
-		return fmt.Errorf("redfish: %s %s: %w", method, path, err)
-	}
-	defer resp.Body.Close()
-	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return fmt.Errorf("redfish: %s %s: %w", method, path, err)
-	}
-	if resp.StatusCode/100 != 2 {
-		msg := strings.Join(strings.Fields(string(data)), " ")
-		if len(msg) > 200 {
-			msg = msg[:200] + "…"
-		}
-		return fmt.Errorf("redfish: %s %s: %s %s", method, path, resp.Status, msg)
 	}
 	if out == nil || len(data) == 0 {
 		return nil
@@ -540,4 +551,96 @@ func (c *client) do(ctx context.Context, method, path string, body, out any) err
 		return fmt.Errorf("redfish: %s %s: %w", method, path, err)
 	}
 	return nil
+}
+
+// send makes one request and returns its status and body; err is set for any
+// status other than 2xx.
+func (c *client) send(ctx context.Context, method, path string, body any, session bool, token string) (int, []byte, error) {
+	u, err := c.url(path)
+	if err != nil {
+		return 0, nil, err
+	}
+	var rd io.Reader
+	if body != nil {
+		b, err := json.Marshal(body)
+		if err != nil {
+			return 0, nil, err
+		}
+		rd = bytes.NewReader(b)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, u, rd)
+	if err != nil {
+		return 0, nil, err
+	}
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("OData-Version", "4.0")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	switch {
+	case session && token != "":
+		req.Header.Set("X-Auth-Token", token)
+	case !session && (c.user != "" || c.pass != ""):
+		req.SetBasicAuth(c.user, c.pass)
+	}
+	resp, err := c.hc.Do(req)
+	if err != nil {
+		return 0, nil, fmt.Errorf("redfish: %s %s: %w", method, path, err)
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("redfish: %s %s: %w", method, path, err)
+	}
+	if resp.StatusCode/100 != 2 {
+		msg := strings.Join(strings.Fields(string(data)), " ")
+		if len(msg) > 200 {
+			msg = msg[:200] + "…"
+		}
+		return resp.StatusCode, data, fmt.Errorf("redfish: %s %s: %s %s", method, path, resp.Status, msg)
+	}
+	if method == http.MethodPost && path == sessionsPath {
+		c.mu.Lock()
+		c.token, c.location = resp.Header.Get("X-Auth-Token"), resp.Header.Get("Location")
+		c.mu.Unlock()
+	}
+	return resp.StatusCode, data, nil
+}
+
+// login opens a session and returns its token. Logins run one at a time; if
+// another request has already replaced the session that failed (stale), it
+// returns the new token without logging in again.
+func (c *client) login(ctx context.Context, stale string) (string, error) {
+	c.loginMu.Lock()
+	defer c.loginMu.Unlock()
+	c.mu.Lock()
+	if c.token != "" && c.token != stale {
+		t := c.token
+		c.mu.Unlock()
+		return t, nil
+	}
+	c.mu.Unlock()
+	cred := map[string]string{"UserName": c.user, "Password": c.pass}
+	if _, _, err := c.send(ctx, http.MethodPost, sessionsPath, cred, true, ""); err != nil {
+		return "", fmt.Errorf("session login: %w", err)
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if c.token == "" {
+		return "", fmt.Errorf("redfish: session login: no X-Auth-Token in the response")
+	}
+	return c.token, nil
+}
+
+// logout deletes the current session, if there is one.
+func (c *client) logout(ctx context.Context) error {
+	c.mu.Lock()
+	token, loc := c.token, c.location
+	c.token, c.location = "", ""
+	c.mu.Unlock()
+	if token == "" || loc == "" {
+		return nil
+	}
+	_, _, err := c.send(ctx, http.MethodDelete, loc, nil, true, token)
+	return err
 }

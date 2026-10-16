@@ -138,8 +138,10 @@ October, before the BigQuery quota resets:
 4. **Phase 0 remaining** and the **testbed decision by 25 Oct**.
 5. ~~**Phase 1: the Redfish driver**~~: first cut done 2026-10-16
    ([`internal/meter/redfish`](internal/meter/redfish/)). Reads, resets and records quirks; passes
-   its contract test against DMTF's mockup files and DMTF's mockup server. Still to do: session
-   authentication (some BMCs refuse basic auth), and a run against a real BMC on the testbed.
+   its contract test against DMTF's mockup files and DMTF's mockup server. Session authentication
+   added the same day: basic first, a Redfish session when the BMC refuses it (or from the start
+   if configured), renewed once when it ends, logged out on `Close`. Still to do: a run against a
+   real BMC on the testbed.
 6. ~~**`wattproof-report`, first cut**~~: done 2026-10-16 ([`cmd/wattproof-report`](cmd/wattproof-report/)).
    Reads a per-workload trace file; recommends CPU per hour of the week and memory (ADR-0013);
    reports exclusions with reasons, freed CPU, memory and nodes at the peak, the ratio
