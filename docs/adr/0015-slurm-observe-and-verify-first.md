@@ -44,5 +44,9 @@ Most research computing centres and many GPU clusters run Slurm, not Kubernetes.
 - No energy claim against Slurm's own power saving is expected. The simulator found none against a
   reactive baseline on identical servers. A Slurm planner would have to win on job wait at equal
   energy, or on energy at equal wait, in V2's design before it ships.
+- Public traces support this (2026-10-16, [notebook](../notebook/2026-10-16-slurm-energy-two-sites.md),
+  two sites, E2): a 30-minute timer alone would save 18–28% of GPU-node energy at sites that run
+  without power saving; perfect foresight adds nothing to that, and would remove the boot waits of
+  3–4% of job starts that remain after Slurm's own placement.
 - Holding BMC credentials on a production HPC site needs the same threat model and security
   review as a Kubernetes design partner (ROADMAP v0.3).

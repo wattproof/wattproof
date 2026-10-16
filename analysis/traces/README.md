@@ -23,3 +23,17 @@ reads a leading `#` or `--` line on the command line as a flag.
 on SURF Lisa's job table (Zenodo 11028934, CC-BY-4.0). It reads parquet through DuckDB:
 
     uv run --no-project --with duckdb python -I slurm_idle.py <dir with the two parquet files>
+
+`slurm_energy.py` adds Lisa's node power metrics (the energy step); it takes the job directory, a
+glob of power parquet files and a spill directory:
+
+    uv run --no-project --with duckdb python -I slurm_energy.py <dir> '<power glob>' --tmp <dir>
+
+`slurm_m100.py` runs idle time, power and savings on CINECA Marconi100 (M100 ExaData, CC-BY-4.0),
+from the monthly archives' `job_table`, `ipmi_pub` (`ps0_input_power`, `ps1_input_power`) and,
+where present, `slurm_pub` node counts, laid out as in the archive:
+
+    uv run --no-project --with duckdb python -I slurm_m100.py <dir> --tmp <dir>
+
+`slurm_replace.py` is the re-placement check both idle scripts use: whether a start that finds its
+node powered off could have used an idle node of the same hardware type that was still on.

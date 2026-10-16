@@ -11,9 +11,13 @@ import argparse
 import bisect
 import collections
 import datetime as dt
+import os
 import sys
 
 import duckdb
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from slurm_replace import replace
 
 DAY = 86400
 HOUR = 3600
@@ -35,6 +39,12 @@ def load(d):
         ).fetchall()
     )
     return jobs, gpu
+
+
+def pools(d):
+    """Hardware type per node: CPU model and GPU model."""
+    return {n: (c, g) for n, c, g in duckdb.connect().sql(
+        f"SELECT node, cpu_model, gpu_model FROM '{d}/node_hardware_info.parquet'").fetchall()}
 
 
 def expand(hostlist):
@@ -80,6 +90,7 @@ def main():
     ap.add_argument("dir")
     a = ap.parse_args()
     jobs, gpu = load(a.dir)
+    pool = pools(a.dir)
 
     kept, dropped = [], 0
     for j, n, s, e, sub in jobs:
@@ -125,6 +136,10 @@ def main():
                     starts[n].append((s, j))
     for n in starts:
         starts[n].sort()
+    starts_at = {n: collections.defaultdict(list) for n in starts}
+    for n, st in starts.items():
+        for s, j in st:
+            starts_at[n][s].append(j)
     nodes = sorted(n for n in busy if n in gpu)
     unknown = sorted(n for n in busy if n not in gpu)
     print(f"multi-node rows expanded: {multi}")
@@ -179,6 +194,20 @@ def main():
                           f"wakes {wakes:6d}, jobs delayed {len(delayed):6d} "
                           f"({len(delayed) / len(jobs_started):.2%} of starts), "
                           f"wait {wakes * b / 60:,.0f} node-hours")
+            if use_unav:
+                continue
+            by_node = collections.defaultdict(list)
+            for n, s, e, ends in iv:
+                by_node[n].append((s, e, ends))
+            types = collections.Counter(pool[n] for n in by_node)
+            print(f"   hardware types: {len(types)} ({', '.join(f'{c}/{g} {k}' for (c, g), k in types.most_common())})")
+            for sm in SUSPEND_MIN:
+                delayed, avoided, left = replace(by_node, pool, starts_at, sm * 60)
+                rest = len(delayed) - len(avoided)
+                print(f"   re-placement, SuspendTime {sm:2d} min: delayed {len(delayed)} -> {rest} "
+                      f"({rest / len(jobs_started):.2%} of starts); wait "
+                      + " / ".join(f"{left * b / 60:,.0f}" for b in BOOT_MIN)
+                      + f" node-hours ({' / '.join(str(b) for b in BOOT_MIN)} min boot)")
 
         # Idle share by hour of week (Monday 00:00 first), 72 h+ gaps unavailable.
         tz = dt.timezone(dt.timedelta(hours=1)) if utc else dt.timezone.utc

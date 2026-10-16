@@ -135,6 +135,25 @@ SchedMD, Slurm's developer, has belonged to NVIDIA since December 2025.
    cost) and Verify study V2. **Acting waits** for V2's result at one site and for a site that
    asks for it. Neither moves T0 or v0.1.
 
+## Update 2026-10-16: two public Slurm traces
+
+[Notebook](../../notebook/2026-10-16-slurm-energy-two-sites.md), [plan](../slurm-trace-plan.md):
+SURF Lisa (2022) and CINECA Marconi100 (2020), job tables with measured node power, neither
+running power saving in the period.
+
+- **Idle node time is large.** At `SuspendTime` = 30 minutes, 19–24% of Lisa's and 40% of
+  Marconi100's node-hours would be powered off: 18–19% of Lisa's GPU-node energy and 27–28% of
+  Marconi100's. Lisa's CPU nodes save 1–4%, a lower bound (BMC reading without shared chassis
+  power).
+- **A forecast adds no energy.** Perfect foresight saves 0.1–1.0 points less than the timer.
+- **It could remove waits.** With Slurm allocating powered-up nodes first (counted optimistically),
+  3.1% of Lisa's CPU job starts and 4.2% of Marconi100's would still wait for a boot; 0.8% on
+  Lisa's GPU nodes.
+
+This confirms judgement 2: no energy claim against stock power saving; the case for a Slurm
+planner is job wait, now bounded on two sites. The report's first finding at a site without power
+saving would be the saving it leaves on the table.
+
 ## Sources
 
 - [Slurm Power Saving Guide](https://slurm.schedmd.com/power_save.html)
