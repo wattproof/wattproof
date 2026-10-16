@@ -1,6 +1,6 @@
 # ADR-0013: Rightsize memory too, at the learned peak
 
-Status: proposed, 2026-10-09. Amends ADR-0012 ("memory stays recommend-only"). Consistent with
+Status: accepted, 2026-10-16 (proposed 2026-10-09). Amends ADR-0012 ("memory stays recommend-only"). Consistent with
 ADR-0010, which already allows memory requests down to the observed peak plus a margin.
 
 ## Context
@@ -36,6 +36,9 @@ From v0.2, for opted-in workloads only (ADR-0010's eligibility rules unchanged):
   memory-pressure evictions as non-inferiority endpoints.
 - The rule must beat the weekly peak tested so far, which learned growth too slowly (1.6–3.2% of
   usage above the request against VPA's 0.7–1.6%). The trailing-window rule is simulated before
-  it is accepted.
+  it is accepted. **Simulated 2026-10-16** ([notebook](../notebook/2026-10-16-memory-trailing-window.md)):
+  0.18–0.33% of usage above the request, a quarter or less of VPA's, so the condition is met. On
+  mixed hardware it uses the same energy as the weekly peak; on identical servers, services with a
+  daily cycle use 9–17% more.
 - Wattproof's energy claim against VPA narrows to mixed hardware. The claims that hold on any
   hardware are service level (no pending pods) and proof at the wall.

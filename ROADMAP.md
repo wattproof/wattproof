@@ -73,7 +73,7 @@ Every phase ends in tests that can fail. A green suite that cannot go red proves
   level in the last; with memory rightsized too, Wattproof wins only on mixed hardware (1–10%).
   The v1.1 statement below that
   rightsizing is "the larger lever" no longer holds.
-- **Memory rightsizing is proposed** ([ADR-0013](docs/adr/0013-memory-rightsizing.md)). Every
+- **Memory rightsizing is accepted** ([ADR-0013](docs/adr/0013-memory-rightsizing.md), 2026-10-16). Every
   rightsizing tool found already does it ([feature note](docs/research/features/rightsizing.md#update-2026-10-09-what-the-traces-changed)),
   so Wattproof needs it to match them.
 - **The claims that hold on any hardware are service level and proof.** Wattproof left no pods
@@ -122,9 +122,10 @@ protocol draft and a lab notebook page with the simulation results are public.
 ## Next steps (from 2026-10-09)
 
 October, before the BigQuery quota resets:
-1. **Decide ADR-0013** (memory rightsizing). Owner: Arman.
-2. **Simulate the trailing-window memory rule** on cell a and compare its per-pod shortfall with
-   VPA's (0.7–1.6% of memory usage). ADR-0013 is accepted only if it is no worse.
+1. ~~Decide ADR-0013~~: accepted 2026-10-16.
+2. ~~Simulate the trailing-window memory rule~~: done 2026-10-16
+   ([notebook](docs/notebook/2026-10-16-memory-trailing-window.md)). 0.18–0.33% of memory usage
+   above the request against VPA's 0.72–1.58%: the condition for ADR-0013 is met.
 3. **Check 2**: compare cell a's hourly tier shape with Google's analysis notebook, from the data
    already downloaded.
 4. **Phase 0 remaining** and the **testbed decision by 25 Oct**.
@@ -132,8 +133,8 @@ October, before the BigQuery quota resets:
 6. **`wattproof-report`, first cut** (Phase 1R step 4), reading the trace file before Prometheus.
 7. **Power profiling software** (Phase 1): the load runner, the analyser driver and
    `wattproof-profile`, tested against fakes before T0. It must be ready on the testbed's first
-   day, because profiling comes before the A/A pilot. **Buy the SPECpower_ssj2008 licence**
-   (owner: Arman) and do a non-compliant trial run on one machine before T0.
+   day, because profiling comes before the A/A pilot. The SPECpower_ssj2008 licence is
+   **deferred** (2026-10-16): Profile W does not need it; Profile S waits until it is bought.
 
 November:
 8. **Alibaba 2018**, locally; **Google cell g** on BigQuery with check 3.
@@ -268,7 +269,7 @@ November (BigQuery quota resets on 1 November):
   (check 3).
 - Then apply the plan's decision rules across both operators and restate Experiment 2's prior.
 - A decision record on memory: rightsizing competes on energy only if it includes memory, which
-  ADR-0012 rules out today. Drafted as [ADR-0013](docs/adr/0013-memory-rightsizing.md) (proposed).
+  ADR-0012 rules out today. [ADR-0013](docs/adr/0013-memory-rightsizing.md), accepted 2026-10-16.
 
 If T0 arrives before Phase 1R is done, Phase 1 and Phase 2 take priority.
 
@@ -470,7 +471,7 @@ engineer is not. See the architecture's "Resize controller" section and
 - Eligibility checks: opt-in annotation, Burstable QoS, no VPA, HPA targeting `AverageValue` only.
   Each rejection is reported with its reason.
 - Hour-of-week usage quantiles per workload; target, margin and floor; warm-up for new pods.
-- If ADR-0013 is accepted: memory requests at the trailing-window peak plus a margin, updated daily;
+- Memory ([ADR-0013](docs/adr/0013-memory-rightsizing.md)): requests at the trailing-window peak plus a margin, updated daily;
   an OOM kill or memory-pressure eviction restores the template request and pauses the workload.
 - Evening and morning sequencing with the planner: resize down before draining, power on before
   resizing up, evict deferred pods.
@@ -490,7 +491,7 @@ Exit tests:
 ## Phase 6: Experiment 2, diurnal rightsizing (T0 + 10 to T0 + 13 weeks)
 
 - Register Experiment 2 ([experiment-protocol.md](docs/experiment-protocol.md)) and run it on the
-  same testbed: B1+VPA, T, T+R (T+RM if ADR-0013 is accepted). Its prior uses the inputs measured
+  same testbed: B1+VPA, T, T+R and T+RM, with memory at ADR-0013's trailing-window rule. Its prior uses the inputs measured
   in Phase 1R, and it reports peak requested cores and peak powered servers next to energy, and OOM
   kills and memory-pressure evictions as non-inferiority endpoints.
 - Publish v0.2.0 with its report and dataset at T0 + 14 weeks.

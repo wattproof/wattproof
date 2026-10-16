@@ -34,3 +34,34 @@ func TestDailyCycle(t *testing.T) {
 		}
 	}
 }
+
+// The trailing-window memory rule (ADR-0013) learns a spike only at the next
+// daily update, holds the spike plus 15% for the 8-day window, then drops back.
+// Before the first update the template's request holds.
+func TestMemTrail(t *testing.T) {
+	s := &service{}
+	for h := range hours {
+		s.present[h] = true
+		s.memUse[h] = 1
+		s.memReq[h] = 4
+	}
+	spike := 10*day + 5
+	s.memUse[spike] = 3
+	trail := arms(s)[10]
+	check := func(h int, want float64) {
+		t.Helper()
+		if math.Abs(trail[h]-want) > 1e-9 {
+			t.Errorf("hour %d: request %v, want %v", h, trail[h], want)
+		}
+	}
+	check(0, 4)           // template before the first update
+	check(day, 1.15)      // first update: the maximum of day 0 plus 15%
+	check(spike, 1.15)    // the spike is not known in its own hour
+	check(11*day-1, 1.15) // nor later that day
+	check(11*day, 3*1.15) // learned at the next update
+	check(18*day, 3*1.15) // still inside the 8-day window
+	check(19*day, 1.15)   // the window has passed the spike
+	if short := arms(s)[11][spike]; math.Abs(short-(3-1.15)) > 1e-9 {
+		t.Errorf("shortfall at the spike %v, want %v", short, 3-1.15)
+	}
+}

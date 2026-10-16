@@ -95,8 +95,13 @@ func runTrace(dir string) error {
 	fmt.Println("scored. R: CPU shaped from earlier weeks (hourly peak +20%). M: memory set to the earlier")
 	fmt.Println("weeks' peak +15%. VPA: CPU and memory at p90 of the last 8 days +15%, updated daily.")
 	fmt.Println("idle: the servers' idle power as a share of peak (published: 16% R7725, 30% R7425).")
+	_, trail := groups[order[0]]["mem_trail"]
+	if trail {
+		fmt.Println("W: memory at the trailing 8 days' maximum +15%, updated daily (ADR-0013).")
+	}
 	fmt.Println()
 	tw := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', tabwriter.AlignRight)
+	var trailRows []string
 	fmt.Fprintln(tw, "services\tworkers\tidle\tB0 kWh\tB1/B0\tB1+VPA/B0\tT/B0\tT+R/B0\tT+RM/B0\tT+R/(B1+VPA)\tT+RM/(B1+VPA)\tT+R/T\tsame, no memory\tpending min B1+VPA\tT+R\tT+RM\tmemory over min B1+VPA\tT+R\tT+RM\t")
 	for _, g := range order {
 		tg := groups[g]
@@ -128,6 +133,10 @@ func runTrace(dir string) error {
 				req, shaped, vpa := minutes(tg["cpu_req"], f), minutes(tg["cpu_shaped"], f), minutes(tg["cpu_vpa"], f)
 				mem, memVPA, memPeak := minutes(tg["mem_req"], fm), minutes(tg["mem_vpa"], fm), minutes(tg["mem_peak"], fm)
 				memUse := minutes(tg["mem_use"], fm)
+				memTrail := memPeak
+				if trail {
+					memTrail = minutes(tg["mem_trail"], fm)
+				}
 				planner := func(label string) *sim.Planner {
 					p := sim.NewPlanner(sim.SeasonalNaive{Period: 24 * hourSteps})
 					p.MemForecast = sim.SeasonalNaive{Period: 24 * hourSteps}
@@ -143,24 +152,50 @@ func runTrace(dir string) error {
 					{planner("T+RM"), shaped, memPeak, memUse},
 					{planner("T+R, no memory"), shaped, nil, nil},
 					{planner("T, no memory"), req, nil, nil},
+					{planner("T+RW"), shaped, memTrail, memUse},
 				}, trainDays*24*hourSteps)
 				if err != nil {
 					return fmt.Errorf("%s, %s, idle %s: %w", g, hw, label, err)
 				}
-				b0, b1, bv, t1, tr, trm, trN, tN := res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7]
+				b0, b1, bv, t1, tr, trm, trN, tN, trw := res[0], res[1], res[2], res[3], res[4], res[5], res[6], res[7], res[8]
 				fmt.Fprintf(tw, "%s\t%s\t%s\t%.0f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.3f\t%.0f\t%.0f\t%.0f\t%.0f\t%.0f\t%.0f\t\n",
 					g, hw, label, b0.KWh(), b1.Joules/b0.Joules, bv.Joules/b0.Joules, t1.Joules/b0.Joules,
 					tr.Joules/b0.Joules, trm.Joules/b0.Joules, tr.Joules/bv.Joules, trm.Joules/bv.Joules,
 					tr.Joules/t1.Joules, trN.Joules/tN.Joules,
 					bv.ShortfallMinutes, tr.ShortfallMinutes, trm.ShortfallMinutes,
 					bv.MemOverloadMinutes, tr.MemOverloadMinutes, trm.MemOverloadMinutes)
-				if t := bv.OverloadMinutes + tr.OverloadMinutes + trm.OverloadMinutes; t > 0 {
+				if trail {
+					trailRows = append(trailRows, fmt.Sprintf("%s\t%s\t%s\t%.3f\t%.3f\t%.0f\t%.0f\t%.0f\t%.0f\t",
+						g, hw, label, trw.Joules/bv.Joules, trw.Joules/trm.Joules,
+						bv.ShortfallMinutes, trw.ShortfallMinutes, bv.MemOverloadMinutes, trw.MemOverloadMinutes))
+				}
+				if t := bv.OverloadMinutes + tr.OverloadMinutes + trm.OverloadMinutes + trw.OverloadMinutes; t > 0 {
 					return fmt.Errorf("%s, %s: CPU overload of %v minutes; add a column for it", g, hw, t)
 				}
 			}
 		}
 	}
 	tw.Flush()
+	if trail {
+		fmt.Println()
+		tw = tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', tabwriter.AlignRight)
+		fmt.Fprintln(tw, "services\tworkers\tidle\tT+RW/(B1+VPA)\tT+RW/T+RM\tpending min B1+VPA\tT+RW\tmemory over min B1+VPA\tT+RW\t")
+		for _, r := range trailRows {
+			fmt.Fprintln(tw, r)
+		}
+		tw.Flush()
+		fmt.Println("Memory usage above the request, scored weeks, share of memory usage (per service, summed):")
+		for _, g := range order {
+			var use, vpa, peak, tr float64
+			for h := trainDays * 24; h < len(groups[g]["mem_use"]); h++ {
+				use += groups[g]["mem_use"][h]
+				vpa += groups[g]["mem_short_vpa"][h]
+				peak += groups[g]["mem_short_peak"][h]
+				tr += groups[g]["mem_short_trail"][h]
+			}
+			fmt.Printf("  %-13s VPA %.2f%%  weekly peak (T+RM) %.2f%%  trailing max (T+RW) %.2f%%\n", g, 100*vpa/use, 100*peak/use, 100*tr/use)
+		}
+	}
 	fmt.Println()
 	fmt.Println("same, no memory: T+R/T with memory ignored, as before the trace analysis plan. The gap to")
 	fmt.Println("T+R/T is what ignoring memory overstated. memory over min: minutes in which some node's")

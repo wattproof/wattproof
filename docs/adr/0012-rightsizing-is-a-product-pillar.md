@@ -29,8 +29,8 @@ steps:
 3. **HPA coordination** (after v0.2): workloads scaled on CPU `Utilization` get their target
    scaled with the request instead of being excluded.
 
-Memory stays recommend-only. CPU limits are never lowered. (Under review: ADR-0013 proposes
-rightsizing memory too, after the trace simulation of 2026-10-08.)
+Memory stays recommend-only. CPU limits are never lowered. (Amended 2026-10-16: ADR-0013 rightsizes
+memory too, after the trace simulation of 2026-10-08.)
 
 Every experiment that includes rightsizing reports capacity as well as energy: peak requested
 cores and peak powered servers.

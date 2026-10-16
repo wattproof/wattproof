@@ -191,8 +191,8 @@ registered separately before its first treatment block.
   B1+VPA is the expert comparison.
 - **Secondary and non-inferiority:** everything from Experiment 1, plus CPU throttling ratio, node
   CPU pressure (PSI), resize latency, and the count of deferred or infeasible resizes.
-- **Memory (if [ADR-0013](adr/0013-memory-rightsizing.md) is accepted):** the Wattproof arm also
-  rightsizes memory (T+RM), because B1+VPA does. In the trace-calibrated simulation, CPU-only T+R
+- **Memory ([ADR-0013](adr/0013-memory-rightsizing.md), accepted 2026-10-16):** the Wattproof arm
+  also rightsizes memory (T+RM, at the trailing 8-day maximum plus 15%), because B1+VPA does. In the trace-calibrated simulation, CPU-only T+R
   used more energy than B1+VPA in 23 of 24 scenarios and drew level in the last. OOM kills and
   memory-pressure evictions become non-inferiority endpoints.
 - **Capacity (secondary):** peak requested cores and peak powered servers per block. Power state

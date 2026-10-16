@@ -176,11 +176,11 @@ found; it is the competitor closest to our segment and is checked again before t
 ### Revised judgement
 
 1. **Memory rightsizing is needed.** Without it, Wattproof uses more energy than the free baseline
-   in simulation. Proposed in [ADR-0013](../../adr/0013-memory-rightsizing.md).
+   in simulation. Accepted 2026-10-16 as [ADR-0013](../../adr/0013-memory-rightsizing.md).
 2. **Its energy effect against VPA is small**, and only on mixed hardware, on the one operator
    measured so far (simulation). With memory rightsized, Wattproof left no pods pending where
    B1+VPA left them pending 5–16 minutes.
-3. **Experiment 2** gets T+RM as its Wattproof arm if ADR-0013 is accepted, and OOM kills and
+3. **Experiment 2** gets T+RM (ADR-0013's trailing-window rule) as its Wattproof arm, and OOM kills and
    memory-pressure evictions as non-inferiority endpoints. Its prior is restated after Alibaba.
 4. **The report (Phase 1R step 4)** still comes first: it shows what any rightsizing would free in
    servers and kWh on owned hardware, which none of the tools above report.

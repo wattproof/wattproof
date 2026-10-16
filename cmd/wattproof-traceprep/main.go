@@ -31,6 +31,8 @@ const (
 	vpaQ   = 0.9  // VPA: p90 of usage ...
 	vpaM   = 0.15 // ... plus 15%, over 8 days, updated daily
 	memM   = 0.15 // memory set to the learned weekly peak + 15% (arm T+R+M)
+	trailQ = 1.0  // ADR-0013's rule: the maximum of memory usage over the trailing 8 days ...
+	trailM = 0.15 // ... plus 15%, updated daily (arm T+RW)
 )
 
 type service struct {
@@ -66,7 +68,7 @@ func run(in, out string) error {
 		"manual-daily": func(s *service, d bool) bool { return s.manual && d },
 	}
 	order := []string{"all", "manual", "daily", "manual-daily"}
-	cols := []string{"cpu_use", "cpu_req", "cpu_shaped", "cpu_vpa", "mem_use", "mem_req", "mem_vpa", "mem_peak", "mem_short_vpa", "mem_short_peak"}
+	cols := []string{"cpu_use", "cpu_req", "cpu_shaped", "cpu_vpa", "mem_use", "mem_req", "mem_vpa", "mem_peak", "mem_short_vpa", "mem_short_peak", "mem_trail", "mem_short_trail"}
 	sums := map[string][][]float64{}
 	counts := map[string]int{}
 	for _, g := range order {
@@ -101,7 +103,8 @@ func run(in, out string) error {
 	fmt.Fprintln(bw, "# analysis/traces/google2019_cell.sql and cmd/wattproof-traceprep. Units: Google's")
 	fmt.Fprintln(bw, "# normalised CPU and memory. Hour 0 starts 2019-05-01 00:00 PT.")
 	fmt.Fprintln(bw, "# cpu_shaped and mem_peak learn from earlier weeks only; cpu_vpa and mem_vpa from the")
-	fmt.Fprintln(bw, "# trailing 8 days, updated daily. mem_short_*: memory usage above that request.")
+	fmt.Fprintln(bw, "# trailing 8 days, updated daily. mem_trail: the trailing 8 days' maximum plus 15%, updated")
+	fmt.Fprintln(bw, "# daily (ADR-0013). mem_short_*: memory usage above that request.")
 	for _, g := range order {
 		fmt.Fprintf(bw, "# services in %s: %d\n", g, counts[g])
 	}
@@ -137,6 +140,7 @@ func arms(s *service) [][]float64 {
 	vpa := sim.VPALearned(use, req, day, 8*day, vpaQ, vpaM)
 	memVPA := sim.VPALearned(s.memUse[:], s.memReq[:], day, 8*day, vpaQ, vpaM)
 	memPeak := sim.ShapeLearned(s.memUse[:], s.memReq[:], make([]float64, hours), week, week, memM)
+	memTrail := sim.VPALearned(s.memUse[:], s.memReq[:], day, 8*day, trailQ, trailM)
 	short := func(r []float64) []float64 {
 		o := make([]float64, hours)
 		for h := range o {
@@ -145,7 +149,8 @@ func arms(s *service) [][]float64 {
 		return o
 	}
 	out := [][]float64{slices.Clone(use), slices.Clone(req), shaped, vpa,
-		slices.Clone(s.memUse[:]), slices.Clone(s.memReq[:]), memVPA, memPeak, short(memVPA), short(memPeak)}
+		slices.Clone(s.memUse[:]), slices.Clone(s.memReq[:]), memVPA, memPeak, short(memVPA), short(memPeak),
+		memTrail, short(memTrail)}
 	for _, series := range out {
 		for h := range series {
 			if !s.present[h] {
